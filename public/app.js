@@ -2,10 +2,10 @@
 //
 // Local first: the whole state lives in localStorage and the page works with
 // no account. Signing in adds a server copy, merged per prompt by the same
-// merge.js the Worker runs, so two browsers can edit the list without one
+// merge.js?v=d9b3e890d7 the Worker runs, so two browsers can edit the list without one
 // clobbering the other.
 
-import { merge, emptyState, normalize, sameState, MAX_PROMPTS } from './merge.js';
+import { merge, emptyState, normalize, sameState, MAX_PROMPTS } from './merge.js?v=d9b3e890d7';
 
 const STORE_KEY = 'tmea:state';
 const THEME_KEY = 'tmea:theme';

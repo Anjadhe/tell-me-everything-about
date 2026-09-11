@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "stamp": "node scripts/stamp.js",
+    "deploy": "node scripts/stamp.js && wrangler deploy",
     "db:migrate:local": "wrangler d1 migrations apply tmea --local",
     "db:migrate": "wrangler d1 migrations apply tmea --remote",
     "test": "node --test test/*.test.js"

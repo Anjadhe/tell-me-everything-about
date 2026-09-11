@@ -1,5 +1,7 @@
 # Tell me everything about
 
+Live at [tmea.space](https://tmea.space). MIT licensed.
+
 A home page that finishes your prompt for you. Pick a prompt, type a topic,
 press Enter, and it opens in Google AI Mode, Perplexity, ChatGPT, Claude or
 wherever you like. Up to six prompts, each with its own destination.
@@ -16,7 +18,8 @@ plain redirect from the browser to the engine.
 |------|------|
 | `public/index.html`, `app.css`, `app.js` | The whole page. Vanilla, one module script. |
 | `public/merge.js` | The one merge (per prompt, newest wins, tombstones). Runs in the page and the Worker. |
-| `public/_headers` | Cache headers so repeat opens come from the browser cache. |
+| `public/_headers` | Cache headers: HTML briefly, versioned assets for a year. |
+| `scripts/stamp.js` | Stamps `?v=<content hash>` on asset URLs before every deploy so a page never pairs with a stale stylesheet. |
 | `src/index.js` | Cloudflare Worker: magic-link sign-in, sessions, one state blob per user. |
 | `migrations/` | D1 schema. |
 | `test/` | `node --test` over the merge. |
@@ -40,7 +43,7 @@ you ask for one, so the whole account flow works with no mail provider.
 npx wrangler login
 npx wrangler d1 create tmea           # paste the database_id into wrangler.jsonc
 npm run db:migrate
-npx wrangler deploy
+npm run deploy                        # stamps asset versions, then wrangler deploy
 ```
 
 Then pick ONE way to send the sign-in email and set `MAIL_FROM` in
