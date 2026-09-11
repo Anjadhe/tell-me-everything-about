@@ -1,0 +1,38 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "tell-me-everything-about",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+
+  // The page itself is static and served from the edge cache; only the
+  // account and sync routes reach the Worker.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/api/*", "/auth/*"]
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tmea",
+      "database_id": "REPLACE_AFTER_wrangler_d1_create",
+      "migrations_dir": "./migrations"
+    }
+  ],
+
+  // Magic-link mail. Uncomment once a domain is onboarded with
+  // `wrangler email sending enable <domain>`; until then set RESEND_API_KEY
+  // as a secret, or DEV_LINKS=1 to print the link instead of sending it.
+  // "send_email": [{ "name": "EMAIL" }],
+
+  "vars": {
+    "APP_NAME": "Tell me everything about",
+    "MAIL_FROM": "hello@example.com",
+    "DEV_LINKS": "0"
+  }
+}

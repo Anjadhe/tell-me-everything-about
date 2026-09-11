@@ -1,0 +1,5 @@
+# Copy to .dev.vars for `wrangler dev`. Never commit .dev.vars.
+# With DEV_LINKS=1 the magic link is returned to the page and logged
+# instead of being emailed, so sign-in works with no mail provider.
+DEV_LINKS=1
+# RESEND_API_KEY=re_...

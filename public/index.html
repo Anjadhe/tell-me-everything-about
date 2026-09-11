@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tell me everything about</title>
+<meta name="description" content="A home page that finishes your prompt for you. Type a topic, press Enter, and it opens in Google AI Mode, Perplexity, ChatGPT or wherever you like.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/app.css">
+<link rel="modulepreload" href="/app.js">
+<link rel="modulepreload" href="/merge.js">
+<script>try{var t=localStorage.getItem('tmea:theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
+</head>
+<body>
+
+<header class="top">
+  <a class="brand" href="/" aria-label="Tell me everything about">
+    <svg width="14" height="14" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="currentColor"/><path d="M8 22.5V9.5h2.2v11.2H17v1.8z" fill="var(--ground)"/><circle cx="22.5" cy="21" r="2" fill="var(--accent)"/></svg>
+    <span>tell me everything about</span>
+  </a>
+  <nav class="top-actions">
+    <span id="sync-dot" class="sync-dot" hidden title="Synced"></span>
+    <button type="button" id="account-btn" class="quiet">Sign in</button>
+    <button type="button" id="manage-btn" class="quiet">Prompts</button>
+  </nav>
+</header>
+
+<main class="stage">
+  <div id="prompt-tabs" class="tabs" role="tablist" aria-label="Prompts"></div>
+
+  <form id="ask" class="ask" autocomplete="off">
+    <label class="sentence" for="topic">
+      <span id="lead" class="lead">Tell me everything about </span><span class="slot" id="slot" data-value=""><input id="topic" name="topic" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" aria-label="What do you want to know about?"><span class="ghost" aria-hidden="true">something</span></span><span id="tail" class="tail"></span>
+    </label>
+    <div class="meta">
+      <button type="button" id="engine-btn" class="engine" aria-haspopup="menu" aria-expanded="false">
+        <span class="engine-lead">opens in</span> <span id="engine-name"></span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <span class="hint" id="hint"><kbd>↵</kbd> open <span class="sep"></span> <kbd>⌘</kbd><kbd>↵</kbd> new tab <span class="sep"></span> <kbd>↑</kbd><kbd>↓</kbd> prompt</span>
+    </div>
+  </form>
+
+  <div id="engine-menu" class="menu" role="menu" hidden></div>
+</main>
+
+<footer class="foot">
+  <span id="foot-note">Saved in this browser.</span>
+  <a href="#" id="homepage-help">Make this your home page</a>
+</footer>
+
+<!-- Manage prompts -->
+<dialog id="manage" class="sheet" aria-labelledby="manage-title">
+  <form method="dialog" class="sheet-body">
+    <header class="sheet-head">
+      <h2 id="manage-title">Prompts</h2>
+      <button type="submit" class="quiet" aria-label="Close">Done</button>
+    </header>
+
+    <p class="sheet-intro">Up to six. Write <code>{}</code> where the topic goes, or leave it out to add the topic at the end.</p>
+
+    <ol id="prompt-list" class="prompt-list"></ol>
+    <div class="list-foot">
+      <button type="button" id="add-prompt" class="pill">Add a prompt</button>
+      <span id="prompt-count" class="count"></span>
+    </div>
+
+    <section class="sheet-section">
+      <h3>Settings</h3>
+      <div class="setting">
+        <label for="s-engine">New prompts open in</label>
+        <select id="s-engine"></select>
+      </div>
+      <div class="setting">
+        <label for="s-newtab">Open results in a new tab</label>
+        <input type="checkbox" id="s-newtab" class="switch">
+      </div>
+      <div class="setting">
+        <label for="s-theme">Appearance</label>
+        <select id="s-theme">
+          <option value="system">Match system</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="sheet-section">
+      <h3>Account</h3>
+      <div id="account-panel"></div>
+    </section>
+  </form>
+</dialog>
+
+<!-- Sign in -->
+<dialog id="signin" class="modal" aria-labelledby="signin-title">
+  <form id="signin-form" class="modal-body">
+    <h2 id="signin-title">Keep your prompts everywhere</h2>
+    <p class="modal-text">Sign in with a link sent to your email. No password. Your prompts sync to any browser you sign in on.</p>
+    <div class="field">
+      <input type="email" id="signin-email" name="email" placeholder="you@example.com" required autocomplete="email" inputmode="email">
+      <button type="submit" class="pill solid" id="signin-send">Email me a link</button>
+    </div>
+    <p id="signin-status" class="status" aria-live="polite"></p>
+    <button type="button" class="quiet modal-close" id="signin-cancel">Cancel</button>
+  </form>
+</dialog>
+
+<!-- Home page help -->
+<dialog id="homepage" class="modal" aria-labelledby="homepage-title">
+  <form method="dialog" class="modal-body">
+    <h2 id="homepage-title">Make this your home page</h2>
+    <p class="modal-text">Copy this address, then paste it where your browser keeps the home page setting.</p>
+    <div class="field">
+      <input type="text" id="homepage-url" readonly>
+      <button type="button" class="pill solid" id="homepage-copy">Copy</button>
+    </div>
+    <ul class="steps">
+      <li><b>Chrome</b> Settings, Appearance, turn on Show home button, paste the address. For start-up, Settings, On startup, Open a specific page.</li>
+      <li><b>Safari</b> Settings, General, Homepage. Set New windows open with and New tabs open with to Homepage.</li>
+      <li><b>Firefox</b> Settings, Home, Homepage and new windows, Custom URLs.</li>
+      <li><b>Arc</b> Add it as a pinned tab, or make it the space's start page.</li>
+    </ul>
+    <button type="submit" class="quiet modal-close">Done</button>
+  </form>
+</dialog>
+
+<template id="prompt-row">
+  <li class="prompt-row">
+    <div class="row-grip">
+      <button type="button" class="icon up" aria-label="Move up"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg></button>
+      <button type="button" class="icon down" aria-label="Move down"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+    </div>
+    <div class="row-fields">
+      <input class="f-label" type="text" placeholder="Short name" maxlength="40" aria-label="Name">
+      <input class="f-template" type="text" placeholder="Tell me everything about {}" maxlength="400" aria-label="Prompt">
+      <select class="f-engine" aria-label="Opens in"></select>
+    </div>
+    <button type="button" class="icon delete" aria-label="Delete prompt"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </li>
+</template>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>
