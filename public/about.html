@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>About · Tell me everything about</title>
+<meta name="description" content="What Tell me everything about is, how it works, and what it keeps.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/app.css">
+<script>try{var t=localStorage.getItem('tmea:theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
+<style>
+  .about { width: min(100%, 620px); margin: 0 auto; padding: 4vh 0 10vh; }
+  .about h1 { font-family: var(--serif); font-weight: 400; font-size: clamp(30px, 4.6vw, 40px); line-height: 1.2; letter-spacing: -0.012em; margin: 0 0 22px; }
+  .about h2 { font-size: 13px; font-weight: 600; margin: 34px 0 8px; }
+  .about p, .about li { font-size: 14.5px; line-height: 1.6; color: var(--ink-2); margin: 0 0 12px; }
+  .about p strong { color: var(--ink); font-weight: 500; }
+  .about ul { padding-left: 18px; margin: 0 0 12px; }
+  .about li { margin-bottom: 6px; }
+  .about a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; }
+  .about a:hover { text-decoration-color: var(--ink); }
+  .about .keys { list-style: none; padding: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; align-items: center; }
+  .about .keys kbd { margin-right: 2px; }
+  .about .back { display: inline-block; margin-top: 30px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <a class="brand" href="/" aria-label="Tell me everything about">
+    <svg width="14" height="14" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="currentColor"/><path d="M8 22.5V9.5h2.2v11.2H17v1.8z" fill="var(--ground)"/><circle cx="22.5" cy="21" r="2" fill="var(--accent)"/></svg>
+    <span>tell me everything about</span>
+  </a>
+  <nav class="top-actions">
+    <a class="quiet" href="/">Open the page</a>
+  </nav>
+</header>
+
+<main class="about">
+  <h1>A home page that finishes your prompt for you.</h1>
+
+  <p>Most of us ask the same kinds of questions all day. <strong>Tell me everything about</strong> a person, a company, a word you just heard. Explain something simply. What is the latest on a topic. The question changes, the shape of it does not, and typing the shape every time is the part that gets old.</p>
+
+  <p>This page keeps the shape. Pick a prompt, type the topic, press Enter. It opens, already asked, in Google AI Mode, Google Search, Perplexity, ChatGPT, Claude, Grok or DuckDuckGo. Set it as your browser's home page and it is there every time you open a window.</p>
+
+  <h2>How it works</h2>
+  <ul>
+    <li>Keep up to six prompts. Each has a short name, the wording, and the place it opens. Write <code>{}</code> where the topic goes, or leave it out and the topic is added at the end.</li>
+    <li>The page builds the final sentence and hands it to the engine as a normal search link. Nothing is generated here and nothing is answered here. The engine you chose does that, on its own site, under your own account there.</li>
+    <li>There is no feed, no history and no suggestions. It is a text box that already knows what you were going to say.</li>
+  </ul>
+
+  <h2>Keyboard</h2>
+  <ul class="keys">
+    <li><kbd>↵</kbd></li><li>open in this tab</li>
+    <li><kbd>⌘</kbd><kbd>↵</kbd></li><li>open in a new tab</li>
+    <li><kbd>↑</kbd><kbd>↓</kbd></li><li>switch prompt</li>
+    <li><kbd>/</kbd></li><li>jump to the box</li>
+  </ul>
+
+  <h2>What it keeps</h2>
+  <p>Your prompts and settings live in this browser, in its local storage. Signed out, the page makes no request to any server after it loads. The topics you type go straight from your browser to the engine; they never pass through this site.</p>
+  <p>Signing in is optional and exists for one reason: so your prompts follow you to another browser or computer. It uses a link sent to your email, with no password. The server then stores your email address, a session, and one small record of your prompts and settings. That is the whole list. <strong>Delete account</strong> in the Prompts sheet removes all of it at once. The prompts in the browser you are using stay.</p>
+
+  <h2>Who made it</h2>
+  <p>Made by <a href="https://anjadhe.ai/founder">Ram</a>, who kept typing the same sentence into Google's AI mode and decided the browser should type it instead. Questions and ideas are welcome there.</p>
+
+  <a class="back" href="/">Back to the page</a>
+</main>
+
+<footer class="foot">
+  <span>tmea.space</span>
+  <a href="/">Home</a>
+</footer>
+
+</body>
+</html>

@@ -271,6 +271,8 @@ kbd { font-family: var(--sans); font-size: 11px; color: var(--ink-2); border: 1p
   font-size: 12px;
 }
 .foot a { color: var(--ink-3); text-decoration: none; }
+.foot-links { display: inline-flex; gap: 18px; }
+.foot .quiet, .top .quiet { text-decoration: none; }
 .foot a:hover { color: var(--ink); }
 
 /* ---- dialogs ---- */
