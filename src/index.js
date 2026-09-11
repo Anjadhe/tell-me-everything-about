@@ -196,7 +196,7 @@ async function sendMagicLink(env, email, link) {
         headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, 'content-type': 'application/json' },
         body: JSON.stringify({ from: `${name} <${env.MAIL_FROM}>`, to: [email], subject, text, html }),
       });
-      if (!res.ok) throw new Error(`resend ${res.status}`);
+      if (!res.ok) throw new Error(`resend ${res.status}: ${(await res.text()).slice(0, 300)}`);
       return;
     }
     throw new Error('no mail provider configured (set send_email binding, RESEND_API_KEY, or DEV_LINKS=1)');

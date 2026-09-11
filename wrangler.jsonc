@@ -30,13 +30,19 @@
 			"migrations_dir": "./migrations"
 		}
 	],
-	// Magic-link mail. Uncomment once a domain is onboarded with
-	// `wrangler email sending enable <domain>`; until then set RESEND_API_KEY
-	// as a secret, or DEV_LINKS=1 to print the link instead of sending it.
+	// The page answers on tmea.space; Cloudflare owns the DNS record and the
+	// certificate for it. workers.dev stays on as a fallback address.
+	"workers_dev": true,
+	"routes": [
+		{ "pattern": "tmea.space", "custom_domain": true }
+	],
+	// Magic-link mail through Cloudflare Email Service, sending from
+	// tmea.space (onboarded with `wrangler email sending enable tmea.space`).
+	// RESEND_API_KEY is the alternative; DEV_LINKS=1 prints the link instead.
 	// "send_email": [{ "name": "EMAIL" }],
 	"vars": {
 		"APP_NAME": "Tell me everything about",
-		"MAIL_FROM": "hello@example.com",
+		"MAIL_FROM": "hello@tmea.space",
 		"DEV_LINKS": "0"
 	}
 }
