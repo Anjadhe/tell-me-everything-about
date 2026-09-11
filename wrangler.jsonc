@@ -43,6 +43,7 @@
 	"vars": {
 		"APP_NAME": "Tell me everything about",
 		"MAIL_FROM": "hello@tmea.space",
-		"DEV_LINKS": "0"
+		"DEV_LINKS": "0",
+		"CF_ZONE_TAG": "3992b9a02e8da1c5402f57d9e8f98600"
 	}
 }

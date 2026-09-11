@@ -75,6 +75,24 @@ one line.
 - A signed-out visitor makes no network request beyond the cached assets. A
   signed-in one calls `/api/me` and `/api/state` after the page has painted.
 
+## Usage dashboard
+
+`/admin` shows launches per day and per engine, page loads by people
+(Cloudflare's edge analytics with scanners, probes, unfurlers and assets
+filtered out by `src/usage.js`, which says how much it dropped), accounts and
+sign-ins. It needs two secrets:
+
+```sh
+npx wrangler secret put ADMIN_KEY            # what you type into the page
+npx wrangler secret put CF_ANALYTICS_TOKEN   # API token with Analytics: Read on the zone
+```
+
+`CF_ZONE_TAG` in `wrangler.jsonc` is the zone id. Without the token the
+dashboard still shows launches and accounts.
+
+The page counts a launch with one anonymous request carrying the engine name
+only. No topic, no id, no cookie.
+
 ## Data
 
 The server stores an email address, a session hash, and one JSON blob of

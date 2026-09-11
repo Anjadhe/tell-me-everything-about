@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Usage · Tell me everything about</title>
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/app.css?v=bfcef6d34b">
+<script>try{var t=localStorage.getItem('tmea:theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
+<style>
+  :root { --s-loads: #2f6bff; --s-launch: #e07a1f; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --s-loads: #5d8bff; --s-launch: #d47c24; } }
+  :root[data-theme="dark"] { --s-loads: #5d8bff; --s-launch: #d47c24; }
+  .usage { width: min(100%, 880px); margin: 0 auto; padding: 3vh 0 10vh; }
+  .usage h1 { font-family: var(--serif); font-weight: 400; font-size: 30px; letter-spacing: -0.01em; margin: 0 0 4px; }
+  .usage .sub { color: var(--ink-3); font-size: 12.5px; margin: 0 0 26px; }
+  .usage h2 { font-size: 12px; font-weight: 600; margin: 34px 0 10px; }
+  .usage p { color: var(--ink-2); font-size: 13px; line-height: 1.55; margin: 0 0 10px; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px 12px; }
+  .tile .n { font-size: 30px; font-weight: 500; letter-spacing: -0.02em; line-height: 1; margin-bottom: 8px; font-variant-numeric: tabular-nums; }
+  .tile .l { color: var(--ink-2); font-size: 12px; }
+  .tile .d { color: var(--ink-3); font-size: 11.5px; margin-top: 2px; }
+
+  .chart { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px 10px; }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--ink-2); margin-bottom: 10px; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; background: var(--sw); }
+  .days { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; align-items: end; height: 150px; border-bottom: 1px solid var(--line); }
+  .day { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; align-items: end; height: 100%; position: relative; }
+  .day .bar { border-radius: 4px 4px 0 0; transition: opacity 120ms; }
+  .day .bar[data-n]:not([data-n="0"]) { min-height: 2px; }
+  .day .bar.pv { background: var(--s-loads); }
+  .day .bar.la { background: var(--s-launch); }
+  .day:hover .bar { opacity: .75; }
+  .day .tip { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--ground); font-size: 11.5px; padding: 5px 8px; border-radius: 6px; white-space: nowrap; pointer-events: none; opacity: 0; z-index: 2; }
+  .day:hover .tip, .day:focus-within .tip { opacity: 1; }
+  .xlabels { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; margin-top: 6px; }
+  .xlabels span { font-size: 10.5px; color: var(--ink-3); text-align: center; font-variant-numeric: tabular-nums; }
+
+  .rows { display: grid; gap: 7px; }
+  .row { display: grid; grid-template-columns: 130px 1fr 44px; gap: 10px; align-items: center; font-size: 13px; }
+  .row .k { color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .track { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+  .row .fill { height: 100%; background: var(--s-launch); border-radius: 4px; }
+  #countries .row .fill { background: var(--s-loads); }
+  .row .v { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+
+  table.data { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.data th { text-align: left; font-weight: 500; color: var(--ink-3); padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: 11.5px; }
+  table.data td { padding: 6px 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  table.data td.num { text-align: right; }
+  table.data th.num { text-align: right; }
+
+  .note { color: var(--ink-3); font-size: 12px; margin-top: 10px; }
+  .gate { max-width: 420px; margin: 12vh auto; }
+  .gate p { margin-bottom: 14px; }
+  .err { color: var(--danger); font-size: 12.5px; margin-top: 8px; }
+  @media (max-width: 640px) { .row { grid-template-columns: 90px 1fr 40px; } .days { height: 110px; } }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <a class="brand" href="/" aria-label="Tell me everything about">
+    <svg width="14" height="14" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="currentColor"/><path d="M8 22.5V9.5h2.2v11.2H17v1.8z" fill="var(--ground)"/><circle cx="22.5" cy="21" r="2" fill="var(--accent)"/></svg>
+    <span>tell me everything about</span>
+  </a>
+  <nav class="top-actions">
+    <button type="button" id="refresh" class="quiet" hidden>Refresh</button>
+    <button type="button" id="lock" class="quiet" hidden>Lock</button>
+  </nav>
+</header>
+
+<main class="usage">
+  <section id="gate" class="gate" hidden>
+    <h1>Usage</h1>
+    <p>Enter the admin key to see who is using the page. It stays in this browser.</p>
+    <form id="gate-form" class="field">
+      <input type="password" id="key" placeholder="Admin key" autocomplete="current-password" required>
+      <button type="submit" class="pill solid">Open</button>
+    </form>
+    <div id="gate-err" class="err"></div>
+  </section>
+
+  <section id="dash" hidden>
+    <h1>Usage</h1>
+    <p class="sub" id="generated"></p>
+
+    <div class="tiles" id="tiles"></div>
+
+    <h2>Last 14 days</h2>
+    <div class="chart">
+      <div class="legend"><span style="--sw: var(--s-loads)">Page loads by people</span><span style="--sw: var(--s-launch)">Launches</span></div>
+      <div class="days" id="days" role="img" aria-label="Page loads and launches per day"></div>
+      <div class="xlabels" id="xlabels"></div>
+      <p class="note" id="filtered-note"></p>
+    </div>
+
+    <h2>Launches by engine</h2>
+    <div class="chart"><div class="rows" id="engines"></div></div>
+
+    <h2>Where people are</h2>
+    <div class="chart"><div class="rows" id="countries"></div></div>
+
+    <h2>Day by day</h2>
+    <div class="chart" style="padding: 4px 0 0; overflow-x: auto;">
+      <table class="data" id="table"></table>
+    </div>
+
+    <p class="note">People = requests for the home or About page from a real browser user agent. Dropped = everything else: scanners, link unfurlers, monitors, headless test runs, asset and API requests. Launches are the anonymous count the page sends when someone presses Enter. Accounts and sign-ins come from the database.</p>
+  </section>
+</main>
+
+<script type="module" src="/admin.js"></script>
+</body>
+</html>

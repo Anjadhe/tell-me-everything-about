@@ -9,7 +9,7 @@ const hash = createHash('sha256');
 for (const f of files) hash.update(readFileSync(f, 'utf8').replace(/\?v=[a-f0-9]+/g, ''));
 const v = hash.digest('hex').slice(0, 10);
 
-const targets = ['public/index.html', 'public/about.html', 'public/app.js'];
+const targets = ['public/index.html', 'public/about.html', 'public/admin.html', 'public/app.js'];
 for (const f of targets) {
   const before = readFileSync(f, 'utf8');
   const after = before.replace(/(\/?(?:app\.css|app\.js|merge\.js))(\?v=[a-f0-9]+)?/g, `$1?v=${v}`);

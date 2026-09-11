@@ -6,6 +6,7 @@
 // ever sent here (launching happens in the browser, straight to the engine).
 
 import { merge, normalize, sameState } from '../public/merge.js';
+import { ENGINE_IDS, classifyDay, lastDays } from './usage.js';
 
 const SESSION_COOKIE = 'tmea_session';
 const SESSION_DAYS = 90;
@@ -44,6 +45,8 @@ async function route(request, env, ctx, url) {
   if (pathname === '/api/state' && method === 'GET') return getState(request, env);
   if (pathname === '/api/state' && method === 'PUT') return putState(request, env);
   if (pathname === '/api/account' && method === 'DELETE') return deleteAccount(request, env);
+  if (pathname === '/api/launch' && method === 'POST') return countLaunch(request, env, ctx);
+  if (pathname === '/api/admin/usage' && method === 'GET') return adminUsage(request, env);
   return json({ error: 'Not found.' }, 404);
 }
 
@@ -176,6 +179,97 @@ async function putState(request, env) {
     ).bind(user.id, JSON.stringify(merged), now).run();
   }
   return json({ state: merged, updatedAt: now });
+}
+
+// ---------- usage ----------
+
+// One anonymous count per launch: the engine name and nothing else. No topic,
+// no id, no cookie is read. The page fires it with keepalive right before it
+// navigates away, so the write happens after the response is gone.
+async function countLaunch(request, env, ctx) {
+  const body = await readJson(request);
+  const engine = ENGINE_IDS.includes(body?.engine) ? body.engine : 'other';
+  const day = new Date().toISOString().slice(0, 10);
+  ctx.waitUntil(bump(env, day, 'launch', engine));
+  return new Response(null, { status: 204 });
+}
+
+function bump(env, day, kind, key) {
+  return env.DB.prepare(
+    'INSERT INTO counters (day, kind, key, n) VALUES (?, ?, ?, 1) ON CONFLICT(day, kind, key) DO UPDATE SET n = n + 1'
+  ).bind(day, kind, key).run();
+}
+
+async function adminUsage(request, env) {
+  if (!env.ADMIN_KEY) return json({ error: 'ADMIN_KEY is not set on the Worker.' }, 503);
+  const given = request.headers.get('x-admin-key') || '';
+  if (!(await timingSafeEqualString(given, env.ADMIN_KEY))) return json({ error: 'Wrong key.' }, 401);
+
+  const days = lastDays(14);
+  const since = days[0];
+  const [accounts, signins, launches] = await env.DB.batch([
+    env.DB.prepare('SELECT (SELECT COUNT(*) FROM users) AS users, (SELECT COUNT(*) FROM sessions WHERE expires_at > ?) AS sessions').bind(new Date().toISOString()),
+    env.DB.prepare("SELECT substr(used_at, 1, 10) AS day, COUNT(*) AS n FROM magic_links WHERE used_at IS NOT NULL AND used_at >= ? GROUP BY day").bind(since),
+    env.DB.prepare("SELECT day, key, n FROM counters WHERE kind = 'launch' AND day >= ?").bind(since),
+  ]);
+
+  const launchByDay = Object.fromEntries(days.map(d => [d, 0]));
+  const launchByEngine = {};
+  for (const r of launches.results) {
+    launchByDay[r.day] = (launchByDay[r.day] || 0) + r.n;
+    launchByEngine[r.key] = (launchByEngine[r.key] || 0) + r.n;
+  }
+  const signinByDay = Object.fromEntries(days.map(d => [d, 0]));
+  for (const r of signins.results) signinByDay[r.day] = r.n;
+
+  const traffic = await edgeTraffic(env, days);
+
+  return json({
+    generatedAt: new Date().toISOString(),
+    days,
+    accounts: accounts.results[0],
+    signinByDay,
+    launchByDay,
+    launchByEngine,
+    traffic,
+  });
+}
+
+// Cloudflare's edge analytics, one day per query (the free plan caps a query
+// at one day), classified by usage.js so the dashboard shows people, not
+// scanners, and says how much it dropped. Needs CF_ANALYTICS_TOKEN
+// (Analytics: Read on the zone) and CF_ZONE_TAG.
+async function edgeTraffic(env, days) {
+  if (!env.CF_ANALYTICS_TOKEN || !env.CF_ZONE_TAG) return { available: false, reason: 'CF_ANALYTICS_TOKEN or CF_ZONE_TAG is not set.' };
+  const query = `query($zone:String!,$from:Time!,$to:Time!){ viewer { zones(filter:{zoneTag:$zone}) {
+    rows: httpRequestsAdaptiveGroups(limit:2000, filter:{datetime_geq:$from, datetime_lt:$to}) {
+      count dimensions { userAgent clientRequestPath clientCountryName } } } } }`;
+  const out = {};
+  const results = await Promise.all(days.map(async day => {
+    const from = `${day}T00:00:00Z`;
+    const to = new Date(Date.parse(from) + 86400_000).toISOString();
+    try {
+      const res = await fetch('https://api.cloudflare.com/client/v4/graphql', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${env.CF_ANALYTICS_TOKEN}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ query, variables: { zone: env.CF_ZONE_TAG, from, to } }),
+      });
+      const data = await res.json();
+      if (data.errors?.length) return [day, { error: data.errors[0].message }];
+      const rows = (data.data?.viewer?.zones?.[0]?.rows || []).map(r => ({ ...r.dimensions, count: r.count }));
+      return [day, classifyDay(rows)];
+    } catch (err) {
+      return [day, { error: err?.message || 'fetch failed' }];
+    }
+  }));
+  for (const [day, v] of results) out[day] = v;
+  return { available: true, byDay: out };
+}
+
+async function timingSafeEqualString(a, b) {
+  const enc = new TextEncoder();
+  const [ha, hb] = await Promise.all([crypto.subtle.digest('SHA-256', enc.encode(a)), crypto.subtle.digest('SHA-256', enc.encode(b))]);
+  return crypto.subtle.timingSafeEqual(ha, hb);
 }
 
 // ---------- mail ----------

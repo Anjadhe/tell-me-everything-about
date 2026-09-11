@@ -2,10 +2,10 @@
 //
 // Local first: the whole state lives in localStorage and the page works with
 // no account. Signing in adds a server copy, merged per prompt by the same
-// merge.js?v=d9b3e890d7 the Worker runs, so two browsers can edit the list without one
+// merge.js?v=bfcef6d34b the Worker runs, so two browsers can edit the list without one
 // clobbering the other.
 
-import { merge, emptyState, normalize, sameState, MAX_PROMPTS } from './merge.js?v=d9b3e890d7';
+import { merge, emptyState, normalize, sameState, MAX_PROMPTS } from './merge.js?v=bfcef6d34b';
 
 const STORE_KEY = 'tmea:state';
 const THEME_KEY = 'tmea:theme';
@@ -172,6 +172,7 @@ function launch({ newTab }) {
   const engine = engineById(p.engine || setting('defaultEngine', 'google-ai'));
   const url = engine.url(encodeURIComponent(buildQuery(p.template, topic)));
   document.body.classList.add('launching');
+  countLaunch(engine.id);
   if (newTab || setting('newTab', false)) {
     window.open(url, '_blank', 'noopener');
     topicEl.value = '';
@@ -180,6 +181,14 @@ function launch({ newTab }) {
   } else {
     window.location.assign(url);
   }
+}
+
+// The one thing the page reports: that a launch happened, and to which
+// engine. Never the topic. keepalive lets it complete after navigation.
+function countLaunch(engine) {
+  try {
+    fetch('/api/launch', { method: 'POST', keepalive: true, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ engine }) }).catch(() => {});
+  } catch { /* never block a launch on this */ }
 }
 
 $('#ask').addEventListener('submit', e => { e.preventDefault(); launch({ newTab: false }); });

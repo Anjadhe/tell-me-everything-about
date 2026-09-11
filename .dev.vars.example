@@ -3,3 +3,7 @@
 # instead of being emailed, so sign-in works with no mail provider.
 DEV_LINKS=1
 # RESEND_API_KEY=re_...
+# Dashboard at /admin. Set with `npx wrangler secret put ADMIN_KEY` in production.
+ADMIN_KEY=dev-admin-key
+# Edge traffic on the dashboard: an API token with Analytics:Read on the zone.
+# CF_ANALYTICS_TOKEN=...
