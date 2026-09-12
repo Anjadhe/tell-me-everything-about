@@ -10,7 +10,9 @@
     "deploy": "node scripts/stamp.js && wrangler deploy",
     "db:migrate:local": "wrangler d1 migrations apply tmea --local",
     "db:migrate": "wrangler d1 migrations apply tmea --remote",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "extension:icons": "node scripts/extension-icons.js",
+    "extension:pack": "rm -f tmea-newtab.zip && cd extension && zip -qr ../tmea-newtab.zip . -x \".*\" && echo tmea-newtab.zip"
   },
   "devDependencies": {
     "wrangler": "^4.131.0"

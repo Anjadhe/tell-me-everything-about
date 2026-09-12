@@ -30,6 +30,8 @@ test('classifyDay keeps page loads by people and reports what it dropped', () =>
   ]);
   assert.equal(r.human, 7);
   assert.equal(r.filtered, 46);
+  assert.equal(r.droppedAssets, 6);
+  assert.equal(r.droppedBots, 40);
   assert.deepEqual(r.countries, [{ name: 'US', n: 5 }, { name: 'IN', n: 2 }]);
   assert.equal(r.browsers, 2);
 });

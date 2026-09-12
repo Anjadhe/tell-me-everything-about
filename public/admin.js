@@ -58,9 +58,9 @@ function render(d) {
     return `<div class="day" tabindex="0"><div class="bar pv" data-n="${p ?? 0}" style="height:${ph}%"></div><div class="bar la" data-n="${l}" style="height:${lh}%"></div><div class="tip">${fmtDay(day)} · ${p === null ? '–' : p} loads · ${l} launches</div></div>`;
   }).join('');
   $('#xlabels').innerHTML = days.map((day, i) => `<span>${i % 2 === 0 || days.length <= 7 ? fmtDay(day) : ''}</span>`).join('');
-  const droppedTotal = days.reduce((a, day) => a + dropped(day), 0);
+  const part = k => days.reduce((a, day) => a + ((t.available && t.byDay[day] && !t.byDay[day].error) ? (t.byDay[day][k] || 0) : 0), 0);
   $('#filtered-note').textContent = t.available
-    ? `Dropped ${droppedTotal} requests over 14 days that were not people loading a page (scanners, probes, unfurlers, assets, API).`
+    ? `Not counted over 14 days: ${part('droppedAssets')} requests that were visitors fetching the stylesheet, scripts, favicon or sync (about four per page load), and ${part('droppedBots')} from scanners, probes, link unfurlers and headless test runs.`
     : `Edge analytics are not connected: ${t.reason || ''}`;
 
   const engines = Object.entries(d.launchByEngine).sort((a, b) => b[1] - a[1]);
@@ -77,8 +77,8 @@ function render(d) {
     ? cs.map(([code, n]) => `<div class="row"><span class="k">${esc(COUNTRY ? (safeRegion(code) || code) : code)}</span><div class="track"><div class="fill" style="width:${Math.round((n / maxC) * 100)}%"></div></div><span class="v">${n}</span></div>`).join('')
     : '<p class="note">No page loads by people recorded, or edge analytics not connected.</p>';
 
-  $('#table').innerHTML = `<thead><tr><th>Day</th><th class="num">Page loads</th><th class="num">Browsers</th><th class="num">Launches</th><th class="num">Sign-ins</th><th class="num">Dropped</th></tr></thead><tbody>` +
-    [...days].reverse().map(day => `<tr><td>${day}</td><td class="num">${pv(day) ?? '–'}</td><td class="num">${t.byDay?.[day]?.browsers ?? '–'}</td><td class="num">${d.launchByDay[day] || 0}</td><td class="num">${d.signinByDay[day] || 0}</td><td class="num">${dropped(day)}</td></tr>`).join('') + '</tbody>';
+  $('#table').innerHTML = `<thead><tr><th>Day</th><th class="num">Page loads</th><th class="num">Browsers</th><th class="num">Launches</th><th class="num">Sign-ins</th><th class="num">Not people</th></tr></thead><tbody>` +
+    [...days].reverse().map(day => `<tr><td>${day}</td><td class="num">${pv(day) ?? '–'}</td><td class="num">${t.byDay?.[day]?.browsers ?? '–'}</td><td class="num">${d.launchByDay[day] || 0}</td><td class="num">${d.signinByDay[day] || 0}</td><td class="num">${(t.byDay?.[day]?.droppedBots) ?? '–'}</td></tr>`).join('') + '</tbody>';
 }
 
 function safeRegion(code) { try { return COUNTRY.of(code); } catch { return null; } }

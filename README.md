@@ -19,6 +19,8 @@ plain redirect from the browser to the engine.
 | `public/index.html`, `app.css`, `app.js` | The whole page. Vanilla, one module script. |
 | `public/merge.js` | The one merge (per prompt, newest wins, tombstones). Runs in the page and the Worker. |
 | `public/_headers` | Cache headers: HTML briefly, versioned assets for a year. |
+| `extension/` | Browser extension that opens the page in every new tab. See [New tabs](#new-tabs). |
+| `scripts/extension-icons.js` | Renders `favicon.svg` to the PNG sizes the extension needs. |
 | `scripts/stamp.js` | Stamps `?v=<content hash>` on asset URLs before every deploy so a page never pairs with a stale stylesheet. |
 | `src/index.js` | Cloudflare Worker: magic-link sign-in, sessions, one state blob per user. |
 | `migrations/` | D1 schema. |
@@ -55,6 +57,35 @@ Then pick ONE way to send the sign-in email and set `MAIL_FROM` in
 
 Leave `DEV_LINKS` at `0` in production; with it on, the link is returned to
 the page, which is fine on your laptop and not fine on the internet.
+
+## New tabs
+
+Safari can open new tabs on the home page by itself (Settings, General, New
+tabs open with: Homepage). Chrome, Edge, Brave and Firefox cannot, so
+`extension/` holds a Manifest V3 extension whose new-tab page is tmea.space
+in a full-window frame. Two files plus icons; no permissions.
+
+It is a frame rather than a redirect on purpose: a new tab that is still the
+extension's own page keeps the browser's focus in the address bar, the way
+the built-in new tab does, so typing goes to the address bar and clicking
+the sentence goes to tmea. (The page skips its usual autofocus when framed,
+`public/app.js`.) One consequence: browsers partition storage by top-level
+site, so prompts edited inside a new tab and prompts edited at tmea.space
+directly are two local copies; signing in syncs them through the server.
+
+Load it without a store:
+
+- **Chrome, Edge, Brave**: open `chrome://extensions` (`edge://extensions`,
+  `brave://extensions`), turn on Developer mode, Load unpacked, pick the
+  `extension/` folder. Chrome warns about the `browser_specific_settings`
+  key, which is Firefox's; ignore it.
+- **Firefox**: open `about:debugging#/runtime/this-firefox`, Load Temporary
+  Add-on, pick `extension/manifest.json`. Temporary add-ons last until Firefox
+  quits; a permanent install needs the zip signed at addons.mozilla.org.
+
+`npm run extension:pack` writes `tmea-newtab.zip` for the Chrome Web Store or
+addons.mozilla.org. `npm run extension:icons` regenerates the PNG icons from
+`public/favicon.svg` (only needed if the icon changes).
 
 ## Engines
 

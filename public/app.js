@@ -2,10 +2,10 @@
 //
 // Local first: the whole state lives in localStorage and the page works with
 // no account. Signing in adds a server copy, merged per prompt by the same
-// merge.js?v=bfcef6d34b the Worker runs, so two browsers can edit the list without one
+// merge.js?v=908797b10a the Worker runs, so two browsers can edit the list without one
 // clobbering the other.
 
-import { merge, emptyState, normalize, sameState, MAX_PROMPTS } from './merge.js?v=bfcef6d34b';
+import { merge, emptyState, normalize, sameState, MAX_PROMPTS } from './merge.js?v=908797b10a';
 
 const STORE_KEY = 'tmea:state';
 const THEME_KEY = 'tmea:theme';
@@ -165,6 +165,11 @@ function select(id, { focus = true } = {}) {
   if (focus) topicEl.focus();
 }
 
+// True inside the new-tab extension's frame (extension/newtab.html). There the
+// browser keeps focus in its address bar, and taking it would defeat the
+// point, so the box is not autofocused; and a launch navigates the whole tab.
+const FRAMED = window.self !== window.top;
+
 function launch({ newTab }) {
   const p = selected();
   const topic = topicEl.value.trim();
@@ -178,6 +183,12 @@ function launch({ newTab }) {
     topicEl.value = '';
     slotEl.dataset.value = '';
     setTimeout(() => document.body.classList.remove('launching'), 400);
+  } else if (FRAMED) {
+    // In the new-tab extension's frame, "this tab" means the whole tab: the
+    // engines refuse to load inside a frame, and the frame is not what the
+    // person is looking at anyway. The keypress that got us here is the user
+    // activation a cross-origin frame needs to navigate its top window.
+    try { window.top.location.assign(url); } catch { window.open(url, '_blank', 'noopener'); }
   } else {
     window.location.assign(url);
   }
@@ -216,7 +227,7 @@ function isTyping(el) {
 }
 window.addEventListener('pageshow', () => {
   document.body.classList.remove('launching');
-  topicEl.focus();
+  if (!FRAMED) topicEl.focus();
 });
 
 // Engine menu: per prompt, so "Latest" can live in Perplexity while
@@ -554,7 +565,7 @@ try { selectedId = localStorage.getItem(SELECTED_KEY); } catch { /* ignore */ }
 renderTabs();
 renderSentence();
 renderUser();
-topicEl.focus();
+if (!FRAMED) topicEl.focus();
 
 const params = new URLSearchParams(location.search);
 if (params.has('signed-in')) { setSignedInHint(true); history.replaceState(null, '', '/'); }
