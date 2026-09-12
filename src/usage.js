@@ -1,10 +1,10 @@
-// Turning edge traffic into "people": pure functions, pinned by tests.
+// Tagging edge traffic so the dashboard can filter it. Pure; pinned by tests.
 //
-// Cloudflare counts every request. A new domain draws certificate-log
-// scanners, uptime probes, link unfurlers and our own test runs, so the raw
-// numbers say nothing about people. These filters are the rules I applied by
-// hand the first time; they live here so the dashboard applies the same ones
-// every day and says what it dropped.
+// Nothing is dropped. Every request row Cloudflare reports comes back with
+// tags (who: person or not; what: page, asset, api, other; browser family),
+// and the page filters on those. The tags are the rules I first applied by
+// hand: a new domain draws certificate-log scanners, uptime probes, link
+// unfurlers and our own headless test runs, none of which are people.
 
 export const ENGINE_IDS = ['google-ai', 'google', 'perplexity', 'chatgpt', 'claude', 'grok', 'duckduckgo'];
 
@@ -18,32 +18,54 @@ export function isHumanUA(ua) {
   return BROWSER_RX.test(s);
 }
 
-export const PAGE_PATHS = new Set(['/', '/about']);
+export function browserFamily(ua) {
+  const s = String(ua || '');
+  if (!isHumanUA(s)) return 'Not a browser';
+  if (/edg(e|a|ios)?\//i.test(s)) return 'Edge';
+  if (/opr\/|opera/i.test(s)) return 'Opera';
+  if (/samsungbrowser/i.test(s)) return 'Samsung';
+  if (/vivaldi/i.test(s)) return 'Vivaldi';
+  if (/brave/i.test(s)) return 'Brave';
+  if (/firefox|fxios/i.test(s)) return 'Firefox';
+  if (/chrome|crios/i.test(s)) return 'Chrome';
+  if (/safari/i.test(s)) return 'Safari';
+  return 'Other browser';
+}
+
+export const PAGE_PATHS = new Set(['/', '/about', '/admin']);
+
+export function requestKind(path) {
+  const p = String(path || '');
+  if (PAGE_PATHS.has(p)) return 'page';
+  if (p.startsWith('/api/') || p.startsWith('/auth/')) return 'api';
+  if (/\.(css|js|svg|png|ico|woff2?)$/i.test(p)) return 'asset';
+  return 'other';
+}
+
+export function deviceKind(ua) {
+  const s = String(ua || '');
+  if (/iphone|android.*mobile|windows phone/i.test(s)) return 'Phone';
+  if (/ipad|android(?!.*mobile)|tablet/i.test(s)) return 'Tablet';
+  if (isHumanUA(s)) return 'Desktop';
+  return 'None';
+}
 
 // rows: [{ userAgent, clientRequestPath, clientCountryName, count }]
-export function classifyDay(rows) {
-  let human = 0, filtered = 0, droppedAssets = 0, droppedBots = 0;
-  const byCountry = new Map();
-  const uas = new Map();
-  for (const r of rows || []) {
-    const n = Number(r.count) || 0;
-    // Not a person: scanners, probes, unfurlers, headless runs. Whatever they asked for.
-    if (!isHumanUA(r.userAgent)) { filtered += n; droppedBots += n; continue; }
-    // A person, but the stylesheet, a script, the favicon or a sync call, not a page.
-    if (!PAGE_PATHS.has(r.clientRequestPath)) { filtered += n; droppedAssets += n; continue; }
-    human += n;
-    byCountry.set(r.clientCountryName || '?', (byCountry.get(r.clientCountryName || '?') || 0) + n);
-    uas.set(r.userAgent, (uas.get(r.userAgent) || 0) + n);
-  }
-  return {
-    human,
-    filtered,
-    droppedAssets,
-    droppedBots,
-    countries: [...byCountry].sort((a, b) => b[1] - a[1]).map(([name, n]) => ({ name, n })),
-    // Distinct human user agents is a rough floor on "how many different browsers".
-    browsers: uas.size,
-  };
+// Returns the same rows with tags, user agents trimmed, nothing removed.
+export function tagRows(rows) {
+  return (rows || []).map(r => {
+    const ua = String(r.userAgent || '');
+    return {
+      ua: ua.slice(0, 160),
+      path: String(r.clientRequestPath || ''),
+      country: String(r.clientCountryName || '?'),
+      n: Number(r.count) || 0,
+      who: isHumanUA(ua) ? 'person' : 'not-person',
+      what: requestKind(r.clientRequestPath),
+      browser: browserFamily(ua),
+      device: deviceKind(ua),
+    };
+  });
 }
 
 export function lastDays(n, now = new Date()) {

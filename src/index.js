@@ -6,7 +6,7 @@
 // ever sent here (launching happens in the browser, straight to the engine).
 
 import { merge, normalize, sameState } from '../public/merge.js';
-import { ENGINE_IDS, classifyDay, lastDays } from './usage.js';
+import { ENGINE_IDS, tagRows, lastDays } from './usage.js';
 
 const SESSION_COOKIE = 'tmea_session';
 const SESSION_DAYS = 90;
@@ -236,9 +236,8 @@ async function adminUsage(request, env) {
 }
 
 // Cloudflare's edge analytics, one day per query (the free plan caps a query
-// at one day), classified by usage.js so the dashboard shows people, not
-// scanners, and says how much it dropped. Needs CF_ANALYTICS_TOKEN
-// (Analytics: Read on the zone) and CF_ZONE_TAG.
+// at one day). Every row comes back, tagged by usage.js; the page filters.
+// Needs CF_ANALYTICS_TOKEN (Analytics: Read on the zone) and CF_ZONE_TAG.
 async function edgeTraffic(env, days) {
   if (!env.CF_ANALYTICS_TOKEN || !env.CF_ZONE_TAG) return { available: false, reason: 'CF_ANALYTICS_TOKEN or CF_ZONE_TAG is not set.' };
   const query = `query($zone:String!,$from:Time!,$to:Time!){ viewer { zones(filter:{zoneTag:$zone}) {
@@ -257,7 +256,7 @@ async function edgeTraffic(env, days) {
       const data = await res.json();
       if (data.errors?.length) return [day, { error: data.errors[0].message }];
       const rows = (data.data?.viewer?.zones?.[0]?.rows || []).map(r => ({ ...r.dimensions, count: r.count }));
-      return [day, classifyDay(rows)];
+      return [day, { rows: tagRows(rows) }];
     } catch (err) {
       return [day, { error: err?.message || 'fetch failed' }];
     }

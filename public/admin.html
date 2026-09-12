@@ -13,13 +13,21 @@
   :root { --s-loads: #2f6bff; --s-launch: #e07a1f; }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --s-loads: #5d8bff; --s-launch: #d47c24; } }
   :root[data-theme="dark"] { --s-loads: #5d8bff; --s-launch: #d47c24; }
-  .usage { width: min(100%, 880px); margin: 0 auto; padding: 3vh 0 10vh; }
+  .usage { width: min(100%, 920px); margin: 0 auto; padding: 3vh 0 10vh; }
   .usage h1 { font-family: var(--serif); font-weight: 400; font-size: 30px; letter-spacing: -0.01em; margin: 0 0 4px; }
-  .usage .sub { color: var(--ink-3); font-size: 12.5px; margin: 0 0 26px; }
-  .usage h2 { font-size: 12px; font-weight: 600; margin: 34px 0 10px; }
+  .usage .sub { color: var(--ink-3); font-size: 12.5px; margin: 0 0 20px; }
+  .usage h2 { font-size: 12px; font-weight: 600; margin: 30px 0 10px; }
   .usage p { color: var(--ink-2); font-size: 13px; line-height: 1.55; margin: 0 0 10px; }
 
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  /* Filters: one row, every request is reachable from here. */
+  .filters { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: end; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); position: sticky; top: 8px; z-index: 5; }
+  .filters label { display: grid; gap: 4px; font-size: 11px; color: var(--ink-3); }
+  .filters select { border: 1px solid var(--line-2); background: var(--ground); border-radius: 6px; padding: 5px 8px; font-size: 12.5px; min-width: 120px; max-width: 220px; }
+  .filters .showing { margin-left: auto; font-size: 12px; color: var(--ink-2); align-self: center; }
+  .filters .showing b { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .filters button { font-size: 12px; align-self: center; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 16px; }
   .tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px 12px; }
   .tile .n { font-size: 30px; font-weight: 500; letter-spacing: -0.02em; line-height: 1; margin-bottom: 8px; font-variant-numeric: tabular-nums; }
   .tile .l { color: var(--ink-2); font-size: 12px; }
@@ -40,25 +48,27 @@
   .xlabels { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; margin-top: 6px; }
   .xlabels span { font-size: 10.5px; color: var(--ink-3); text-align: center; font-variant-numeric: tabular-nums; }
 
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .rows { display: grid; gap: 7px; }
-  .row { display: grid; grid-template-columns: 130px 1fr 44px; gap: 10px; align-items: center; font-size: 13px; }
+  .row { display: grid; grid-template-columns: minmax(90px, 40%) 1fr 44px; gap: 10px; align-items: center; font-size: 13px; }
   .row .k { color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .row .track { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
-  .row .fill { height: 100%; background: var(--s-launch); border-radius: 4px; }
-  #countries .row .fill { background: var(--s-loads); }
+  .row .fill { height: 100%; background: var(--s-loads); border-radius: 4px; }
   .row .v { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+  #engines .row .fill { background: var(--s-launch); }
 
   table.data { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-  table.data th { text-align: left; font-weight: 500; color: var(--ink-3); padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: 11.5px; }
-  table.data td { padding: 6px 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
-  table.data td.num { text-align: right; }
-  table.data th.num { text-align: right; }
+  table.data th { text-align: left; font-weight: 500; color: var(--ink-3); padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: 11.5px; white-space: nowrap; }
+  table.data td { padding: 6px 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; vertical-align: top; }
+  table.data td.num, table.data th.num { text-align: right; }
+  table.data td.ua { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--ink-2); max-width: 520px; overflow-wrap: anywhere; }
+  .tag { display: inline-block; font-size: 10.5px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--ink-2); margin-right: 4px; white-space: nowrap; }
 
   .note { color: var(--ink-3); font-size: 12px; margin-top: 10px; }
   .gate { max-width: 420px; margin: 12vh auto; }
   .gate p { margin-bottom: 14px; }
   .err { color: var(--danger); font-size: 12.5px; margin-top: 8px; }
-  @media (max-width: 640px) { .row { grid-template-columns: 90px 1fr 40px; } .days { height: 110px; } }
+  @media (max-width: 720px) { .two { grid-template-columns: 1fr; } .days { height: 110px; } .filters { position: static; } }
 </style>
 </head>
 <body>
@@ -89,28 +99,58 @@
     <h1>Usage</h1>
     <p class="sub" id="generated"></p>
 
-    <div class="tiles" id="tiles"></div>
-
-    <h2>Last 14 days</h2>
-    <div class="chart">
-      <div class="legend"><span style="--sw: var(--s-loads)">Page loads by people</span><span style="--sw: var(--s-launch)">Launches</span></div>
-      <div class="days" id="days" role="img" aria-label="Page loads and launches per day"></div>
-      <div class="xlabels" id="xlabels"></div>
-      <p class="note" id="filtered-note"></p>
+    <div class="filters" id="filters">
+      <label>Days <select id="f-days"><option value="7">Last 7</option><option value="14" selected>Last 14</option></select></label>
+      <label>Who <select id="f-who"><option value="">Everyone</option><option value="person" selected>People (real browsers)</option><option value="not-person">Not people (scanners, probes, bots)</option></select></label>
+      <label>What <select id="f-what"><option value="">All requests</option><option value="page" selected>Pages</option><option value="asset">Assets (css, js, icons)</option><option value="api">API and sign-in</option><option value="other">Other paths</option></select></label>
+      <label>Path <select id="f-path"><option value="">Any</option></select></label>
+      <label>Browser <select id="f-browser"><option value="">Any</option></select></label>
+      <label>Device <select id="f-device"><option value="">Any</option></select></label>
+      <label>Country <select id="f-country"><option value="">Any</option></select></label>
+      <button type="button" id="f-reset" class="quiet">Reset</button>
+      <span class="showing" id="showing"></span>
     </div>
 
-    <h2>Launches by engine</h2>
-    <div class="chart"><div class="rows" id="engines"></div></div>
+    <div class="tiles" id="tiles"></div>
 
-    <h2>Where people are</h2>
-    <div class="chart"><div class="rows" id="countries"></div></div>
+    <h2>Per day</h2>
+    <div class="chart">
+      <div class="legend"><span style="--sw: var(--s-loads)">Requests matching the filter</span><span style="--sw: var(--s-launch)">Launches (all)</span></div>
+      <div class="days" id="days" role="img" aria-label="Requests and launches per day"></div>
+      <div class="xlabels" id="xlabels"></div>
+      <p class="note" id="traffic-note"></p>
+    </div>
+
+    <div class="two">
+      <div>
+        <h2>By path</h2>
+        <div class="chart"><div class="rows" id="paths"></div></div>
+      </div>
+      <div>
+        <h2>By country</h2>
+        <div class="chart"><div class="rows" id="countries"></div></div>
+      </div>
+      <div>
+        <h2>By browser</h2>
+        <div class="chart"><div class="rows" id="browsers"></div></div>
+      </div>
+      <div>
+        <h2>Launches by engine</h2>
+        <div class="chart"><div class="rows" id="engines"></div></div>
+      </div>
+    </div>
+
+    <h2>By user agent</h2>
+    <div class="chart" style="padding: 4px 0 0; overflow-x: auto;">
+      <table class="data" id="uas"></table>
+    </div>
 
     <h2>Day by day</h2>
     <div class="chart" style="padding: 4px 0 0; overflow-x: auto;">
       <table class="data" id="table"></table>
     </div>
 
-    <p class="note">People = requests for the home or About page from a real browser. Nothing is lost: every request still shows in Cloudflare's Traffic view. This page only sets aside what is not a person opening a page, in two groups: the extra files a visit fetches (stylesheet, scripts, favicon, sync), and traffic from scanners, probes, link unfurlers and headless test runs. Launches are the anonymous count the page sends when someone presses Enter. Accounts and sign-ins come from the database.</p>
+    <p class="note">Every request Cloudflare saw is here; the filters choose what you look at and the counts follow the filters. "People" means a real browser user agent; "not people" means scanners, uptime probes, link unfurlers and headless test runs. Launches are the anonymous count the page sends when someone presses Enter and are never filtered. Accounts and sign-ins come from the database. Cloudflare samples analytics on very busy days, so large numbers are estimates.</p>
   </section>
 </main>
 

@@ -1,10 +1,15 @@
-// Usage dashboard. Everything on it comes from one call to /api/admin/usage,
-// which the Worker only answers with the admin key.
+// Usage dashboard. One call to /api/admin/usage returns every request row
+// Cloudflare saw (tagged), the launch counters and the account counts. All
+// filtering happens here, in the browser, so nothing is ever dropped.
 
 const KEY = 'tmea:admin-key';
+const FILTERS_KEY = 'tmea:admin-filters';
 const $ = s => document.querySelector(s);
 const ENGINE_NAMES = { 'google-ai': 'Google AI Mode', google: 'Google Search', perplexity: 'Perplexity', chatgpt: 'ChatGPT', claude: 'Claude', grok: 'Grok', duckduckgo: 'DuckDuckGo', other: 'Other' };
-const COUNTRY = typeof Intl.DisplayNames === 'function' ? new Intl.DisplayNames(['en'], { type: 'region' }) : null;
+const REGION = typeof Intl.DisplayNames === 'function' ? new Intl.DisplayNames(['en'], { type: 'region' }) : null;
+const FILTER_IDS = ['days', 'who', 'what', 'path', 'browser', 'device', 'country'];
+
+let data = null;
 
 function getKey() { try { return localStorage.getItem(KEY) || ''; } catch { return ''; } }
 function setKey(v) { try { v ? localStorage.setItem(KEY, v) : localStorage.removeItem(KEY); } catch { /* ignore */ } }
@@ -20,69 +25,147 @@ async function load() {
   const key = getKey();
   if (!key) return showGate();
   const res = await fetch('/api/admin/usage', { headers: { 'x-admin-key': key } });
-  const data = await res.json().catch(() => ({}));
+  const body = await res.json().catch(() => ({}));
   if (res.status === 401) { setKey(''); return showGate('That key was not accepted.'); }
-  if (!res.ok) return showGate(data.error || `The Worker answered ${res.status}.`);
-  render(data);
+  if (!res.ok) return showGate(body.error || `The Worker answered ${res.status}.`);
+  data = body;
+  $('#generated').textContent = `As of ${new Date(data.generatedAt).toLocaleString()} · days in UTC`;
+  fillFilterOptions();
+  restoreFilters();
+  render();
   $('#gate').hidden = true; $('#dash').hidden = false;
   $('#refresh').hidden = false; $('#lock').hidden = false;
 }
 
-function sum(obj) { return Object.values(obj || {}).reduce((a, b) => a + (Number(b) || 0), 0); }
-function last(days, n) { return days.slice(-n); }
+// ---------- filters ----------
+
+function allRows() {
+  const t = data.traffic;
+  if (!t.available) return [];
+  const out = [];
+  for (const day of data.days) for (const r of (t.byDay[day]?.rows || [])) out.push({ day, ...r });
+  return out;
+}
+
+function filters() {
+  const f = {};
+  for (const id of FILTER_IDS) f[id] = $(`#f-${id}`).value;
+  return f;
+}
+
+function fillFilterOptions() {
+  const rows = allRows();
+  const fill = (id, values, label = v => v) => {
+    const sel = $(`#f-${id}`);
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Any</option>' + values.map(v => `<option value="${esc(v)}">${esc(label(v))}</option>`).join('');
+    sel.value = values.includes(cur) ? cur : '';
+  };
+  const uniq = k => [...new Set(rows.map(r => r[k]))].sort();
+  fill('path', uniq('path'));
+  fill('browser', uniq('browser'));
+  fill('device', uniq('device'));
+  fill('country', uniq('country'), regionName);
+}
+
+function matches(r, f) {
+  return (!f.who || r.who === f.who)
+    && (!f.what || r.what === f.what)
+    && (!f.path || r.path === f.path)
+    && (!f.browser || r.browser === f.browser)
+    && (!f.device || r.device === f.device)
+    && (!f.country || r.country === f.country);
+}
+
+function saveFilters() { try { localStorage.setItem(FILTERS_KEY, JSON.stringify(filters())); } catch { /* ignore */ } }
+function restoreFilters() {
+  try {
+    const f = JSON.parse(localStorage.getItem(FILTERS_KEY) || 'null');
+    if (!f) return;
+    for (const id of FILTER_IDS) {
+      if (f[id] === undefined) continue;
+      const sel = $(`#f-${id}`);
+      if ([...sel.options].some(o => o.value === f[id])) sel.value = f[id];
+    }
+  } catch { /* ignore */ }
+}
+function resetFilters() {
+  $('#f-days').value = '14'; $('#f-who').value = 'person'; $('#f-what').value = 'page';
+  for (const id of ['path', 'browser', 'device', 'country']) $(`#f-${id}`).value = '';
+  saveFilters(); render();
+}
+
+// ---------- render ----------
+
+function sumBy(rows, key) {
+  const m = new Map();
+  for (const r of rows) m.set(r[key], (m.get(r[key]) || 0) + r.n);
+  return [...m].sort((a, b) => b[1] - a[1]);
+}
+function total(rows) { return rows.reduce((a, r) => a + r.n, 0); }
 function fmtDay(d) { const [, m, day] = d.split('-'); return `${Number(m)}/${Number(day)}`; }
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function regionName(code) { if (!REGION || !/^[A-Z]{2}$/.test(code)) return code; try { return REGION.of(code); } catch { return code; } }
+function bars(el, pairs, label = k => k, limit = 12) {
+  const top = pairs.slice(0, limit);
+  const max = Math.max(1, ...top.map(p => p[1]));
+  el.innerHTML = top.length
+    ? top.map(([k, n]) => `<div class="row"><span class="k" title="${esc(k)}">${esc(label(k))}</span><div class="track"><div class="fill" style="width:${Math.round((n / max) * 100)}%"></div></div><span class="v">${n}</span></div>`).join('')
+    : '<p class="note">Nothing matches.</p>';
+}
 
-function render(d) {
-  const days = d.days;
-  const week = last(days, 7);
-  const t = d.traffic;
-  const pv = day => (t.available && t.byDay[day] && !t.byDay[day].error) ? t.byDay[day].human : null;
-  const dropped = day => (t.available && t.byDay[day] && !t.byDay[day].error) ? t.byDay[day].filtered : 0;
+function render() {
+  const f = filters();
+  const days = data.days.slice(-Number(f.days));
+  const t = data.traffic;
+  const everything = allRows().filter(r => days.includes(r.day));
+  const rows = everything.filter(r => matches(r, f));
+  const byDay = Object.fromEntries(days.map(d => [d, 0]));
+  for (const r of rows) byDay[r.day] += r.n;
 
-  $('#generated').textContent = `As of ${new Date(d.generatedAt).toLocaleString()} · days in UTC`;
-
-  const pv7 = week.map(pv).some(v => v !== null) ? week.reduce((a, day) => a + (pv(day) || 0), 0) : null;
+  const shown = total(rows), all = total(everything);
+  $('#showing').innerHTML = t.available ? `Showing <b>${shown}</b> of <b>${all}</b> requests` : 'Edge analytics not connected';
+  const launches = days.reduce((a, d) => a + (data.launchByDay[d] || 0), 0);
+  const signins = days.reduce((a, d) => a + (data.signinByDay[d] || 0), 0);
   const tiles = [
-    { n: week.reduce((a, day) => a + (d.launchByDay[day] || 0), 0), l: 'Launches', dsc: 'last 7 days' },
-    { n: pv7 === null ? '–' : pv7, l: 'Page loads by people', dsc: pv7 === null ? 'edge analytics not connected' : 'last 7 days' },
-    { n: d.accounts.users, l: 'Accounts', dsc: `${d.accounts.sessions} signed-in browser${d.accounts.sessions === 1 ? '' : 's'}` },
-    { n: week.reduce((a, day) => a + (d.signinByDay[day] || 0), 0), l: 'Sign-ins', dsc: 'last 7 days' },
+    { n: t.available ? shown : '–', l: 'Requests matching filter', dsc: `of ${t.available ? all : '–'} in ${days.length} days` },
+    { n: launches, l: 'Launches', dsc: `${days.length} days, all visitors` },
+    { n: data.accounts.users, l: 'Accounts', dsc: `${data.accounts.sessions} signed-in browser${data.accounts.sessions === 1 ? '' : 's'}` },
+    { n: signins, l: 'Sign-ins', dsc: `${days.length} days` },
   ];
   $('#tiles').innerHTML = tiles.map(x => `<div class="tile"><div class="n">${x.n}</div><div class="l">${x.l}</div><div class="d">${x.dsc}</div></div>`).join('');
 
-  const maxV = Math.max(1, ...days.map(day => Math.max(pv(day) || 0, d.launchByDay[day] || 0)));
-  $('#days').innerHTML = days.map(day => {
-    const p = pv(day), l = d.launchByDay[day] || 0;
-    const ph = p === null ? 0 : Math.round((p / maxV) * 100), lh = Math.round((l / maxV) * 100);
-    return `<div class="day" tabindex="0"><div class="bar pv" data-n="${p ?? 0}" style="height:${ph}%"></div><div class="bar la" data-n="${l}" style="height:${lh}%"></div><div class="tip">${fmtDay(day)} · ${p === null ? '–' : p} loads · ${l} launches</div></div>`;
+  const maxV = Math.max(1, ...days.map(d => Math.max(byDay[d], data.launchByDay[d] || 0)));
+  $('#days').innerHTML = days.map(d => {
+    const p = byDay[d], l = data.launchByDay[d] || 0;
+    return `<div class="day" tabindex="0"><div class="bar pv" data-n="${p}" style="height:${Math.round((p / maxV) * 100)}%"></div><div class="bar la" data-n="${l}" style="height:${Math.round((l / maxV) * 100)}%"></div><div class="tip">${fmtDay(d)} · ${p} requests · ${l} launches</div></div>`;
   }).join('');
-  $('#xlabels').innerHTML = days.map((day, i) => `<span>${i % 2 === 0 || days.length <= 7 ? fmtDay(day) : ''}</span>`).join('');
-  const part = k => days.reduce((a, day) => a + ((t.available && t.byDay[day] && !t.byDay[day].error) ? (t.byDay[day][k] || 0) : 0), 0);
-  $('#filtered-note').textContent = t.available
-    ? `Not counted over 14 days: ${part('droppedAssets')} requests that were visitors fetching the stylesheet, scripts, favicon or sync (about four per page load), and ${part('droppedBots')} from scanners, probes, link unfurlers and headless test runs.`
-    : `Edge analytics are not connected: ${t.reason || ''}`;
+  $('#xlabels').innerHTML = days.map((d, i) => `<span>${i % 2 === 0 || days.length <= 7 ? fmtDay(d) : ''}</span>`).join('');
+  const errs = days.filter(d => t.byDay?.[d]?.error);
+  $('#traffic-note').textContent = !t.available ? `Edge analytics are not connected: ${t.reason || ''}` : errs.length ? `Cloudflare returned an error for ${errs.length} day(s): ${t.byDay[errs[0]].error}` : '';
 
-  const engines = Object.entries(d.launchByEngine).sort((a, b) => b[1] - a[1]);
-  const maxE = Math.max(1, ...engines.map(e => e[1]));
-  $('#engines').innerHTML = engines.length
-    ? engines.map(([k, n]) => `<div class="row"><span class="k">${esc(ENGINE_NAMES[k] || k)}</span><div class="track"><div class="fill" style="width:${Math.round((n / maxE) * 100)}%"></div></div><span class="v">${n}</span></div>`).join('')
-    : '<p class="note">No launches counted yet.</p>';
+  bars($('#paths'), sumBy(rows, 'path'));
+  bars($('#countries'), sumBy(rows, 'country'), regionName);
+  bars($('#browsers'), sumBy(rows, 'browser'));
+  const engines = Object.entries(data.launchByEngine).sort((a, b) => b[1] - a[1]);
+  bars($('#engines'), engines, k => ENGINE_NAMES[k] || k);
 
-  const countries = new Map();
-  if (t.available) for (const day of days) for (const c of (t.byDay[day]?.countries || [])) countries.set(c.name, (countries.get(c.name) || 0) + c.n);
-  const cs = [...countries].sort((a, b) => b[1] - a[1]).slice(0, 10);
-  const maxC = Math.max(1, ...cs.map(c => c[1]));
-  $('#countries').innerHTML = cs.length
-    ? cs.map(([code, n]) => `<div class="row"><span class="k">${esc(COUNTRY ? (safeRegion(code) || code) : code)}</span><div class="track"><div class="fill" style="width:${Math.round((n / maxC) * 100)}%"></div></div><span class="v">${n}</span></div>`).join('')
-    : '<p class="note">No page loads by people recorded, or edge analytics not connected.</p>';
+  const uas = sumBy(rows, 'ua').slice(0, 25);
+  const tagOf = ua => { const r = rows.find(x => x.ua === ua); return r ? `<span class="tag">${r.who === 'person' ? 'person' : 'not a person'}</span><span class="tag">${esc(r.browser)}</span><span class="tag">${esc(r.device)}</span>` : ''; };
+  $('#uas').innerHTML = `<thead><tr><th>User agent</th><th>Tags</th><th class="num">Requests</th></tr></thead><tbody>` +
+    (uas.length ? uas.map(([ua, n]) => `<tr><td class="ua">${esc(ua) || '<i>(empty)</i>'}</td><td>${tagOf(ua)}</td><td class="num">${n}</td></tr>`).join('') : '<tr><td colspan="3" class="note">Nothing matches.</td></tr>') + '</tbody>';
 
-  $('#table').innerHTML = `<thead><tr><th>Day</th><th class="num">Page loads</th><th class="num">Browsers</th><th class="num">Launches</th><th class="num">Sign-ins</th><th class="num">Not people</th></tr></thead><tbody>` +
-    [...days].reverse().map(day => `<tr><td>${day}</td><td class="num">${pv(day) ?? '–'}</td><td class="num">${t.byDay?.[day]?.browsers ?? '–'}</td><td class="num">${d.launchByDay[day] || 0}</td><td class="num">${d.signinByDay[day] || 0}</td><td class="num">${(t.byDay?.[day]?.droppedBots) ?? '–'}</td></tr>`).join('') + '</tbody>';
+  $('#table').innerHTML = `<thead><tr><th>Day</th><th class="num">Matching</th><th class="num">All requests</th><th class="num">People, pages</th><th class="num">Not people</th><th class="num">Launches</th><th class="num">Sign-ins</th></tr></thead><tbody>` +
+    [...days].reverse().map(d => {
+      const dayRows = everything.filter(r => r.day === d);
+      const people = total(dayRows.filter(r => r.who === 'person' && r.what === 'page'));
+      const bots = total(dayRows.filter(r => r.who !== 'person'));
+      return `<tr><td>${d}</td><td class="num">${byDay[d]}</td><td class="num">${total(dayRows)}</td><td class="num">${people}</td><td class="num">${bots}</td><td class="num">${data.launchByDay[d] || 0}</td><td class="num">${data.signinByDay[d] || 0}</td></tr>`;
+    }).join('') + '</tbody>';
 }
 
-function safeRegion(code) { try { return COUNTRY.of(code); } catch { return null; } }
-
+for (const id of FILTER_IDS) $(`#f-${id}`).addEventListener('change', () => { saveFilters(); render(); });
+$('#f-reset').addEventListener('click', resetFilters);
 $('#gate-form').addEventListener('submit', e => { e.preventDefault(); setKey($('#key').value.trim()); $('#key').value = ''; load(); });
 $('#refresh').addEventListener('click', load);
 $('#lock').addEventListener('click', () => { setKey(''); showGate(); });
