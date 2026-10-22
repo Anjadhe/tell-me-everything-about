@@ -8,7 +8,7 @@
 // first box instead.
 //
 // Which cards, in what order, is decided here in the browser from the
-// visitor's preferences (interests.js?v=8f1b98feb3). Feedback hides or nudges without
+// visitor's preferences (interests.js?v=e7992f0abd). Feedback hides or nudges without
 // reshuffling what is on screen: the order is fixed until the visitor picks
 // another pill, finishes the picker, or comes back later.
 //
@@ -16,8 +16,8 @@
 // for science, strata for history, …), varied by a seed from the topic so no
 // two look alike, with the card's one striking figure set large on top.
 
-import { CATEGORIES, categoryById, tagById, ORIGINS, KINDS, DEPTHS } from './categories.js?v=8f1b98feb3';
-import { rank, feedback, placeSponsored } from './interests.js?v=8f1b98feb3';
+import { CATEGORIES, categoryById, tagById, ORIGINS, KINDS, DEPTHS, STEPS } from './categories.js?v=e7992f0abd';
+import { rank, feedback, placeSponsored } from './interests.js?v=e7992f0abd';
 
 // Three rows to start (the wide lead card, then three and three); each
 // "Show more" adds two rows under them.
@@ -31,7 +31,7 @@ const SEEN_KEY = 'tmea:explore-seen';
 const SEEN_DAYS = 21;
 const VIEWED_KEY = 'tmea:sponsored-viewed';
 
-export function createExplore({ root, link, fill, preview, clearPreview, launched, prefs, updatePrefs, recent, report, saved, isSaved, toggleSave, tuneHref = '/prompts#settings' }) {
+export function createExplore({ root, link, fill, preview, clearPreview, launched, prefs, updatePrefs, recent, report, saved, isSaved, toggleSave, packs = () => [], retryPack, tuneHref = '/prompts#settings' }) {
   const cardsEl = root.querySelector('.cards');
   const recentEl = root.querySelector('.recent');
   const pillsEl = root.querySelector('.pills');
@@ -53,18 +53,29 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
   let feed = null;
   let count = FIRST;
   let shown = [];
-  let pill = null;        // a category, 'saved', or null for "For you"
+  let pill = null;        // a category, 'saved', 'pack:<key>', or null for "For you"
   let frozen = null;      // card ids in the order first shown
 
+  // The day's list plus cards from the visitor's own interests.
   function ranked(category = pill) {
     if (!feed) return [];
-    return rank(feed.cards, prefs(), { dismissed: readDismissed(), seenBefore: seenBefore(feed.day), category });
+    const ids = new Set();
+    const own = packs().filter(p => p.status === 'ready').flatMap(p => pathOrder(p.cards)).filter(c => !ids.has(c.id) && ids.add(c.id));
+    return rank([...feed.cards, ...own], prefs(), { dismissed: readDismissed(), seenBefore: seenBefore(feed.day), category });
+  }
+
+  function packOf(id = pill) {
+    return typeof id === 'string' && id.startsWith('pack:') ? packs().find(p => `pack:${p.key}` === id) || null : null;
   }
 
   // The ranked list in the order already on screen: cards that are now hidden
   // drop out and the gap closes, newly eligible ones join at the end.
   function ordered() {
     if (pill === 'saved') return saved();
+    if (packOf()) {
+      const dismissed = readDismissed();
+      return pathOrder(packOf().cards).filter(c => !dismissed.has(c.id));
+    }
     const fresh = ranked();
     if (!frozen) { frozen = fresh.map(c => c.id); return fresh; }
     const byId = new Map(fresh.map(c => [c.id, c]));
@@ -86,7 +97,8 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     renderPicker();
     if (!feed) { renderSkeleton(); return; }
     renderPills();
-    const list = pill === 'saved' ? ordered() : placeSponsored(ordered(), feed.sponsored || [], prefs(), { dismissed: readDismissed(), category: pill });
+    const own = pill === 'saved' || packOf();
+    const list = own ? ordered() : placeSponsored(ordered(), feed.sponsored || [], prefs(), { dismissed: readDismissed(), category: pill });
     shown = list.slice(0, count);
     cardsEl.innerHTML = '';
     cardsEl.removeAttribute('aria-busy');
@@ -94,8 +106,22 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     if (!shown.length) {
       const empty = document.createElement('p');
       empty.className = 'explore-empty';
+      const pack = packOf();
       if (pill === 'saved') {
         empty.textContent = 'Nothing saved yet. Use the bookmark on any card to keep it here.';
+      } else if (pack?.status === 'loading') {
+        empty.className = 'explore-empty waiting';
+        empty.textContent = `Writing cards on ${pack.name}: a path from a way in to the rabbit holes. They will be here in a few seconds, and kept for anyone else curious about it too.`;
+      } else if (pack?.status === 'error') {
+        empty.textContent = `${pack.error || 'Could not get cards for this just now.'} `;
+        const again = document.createElement('button');
+        again.type = 'button';
+        again.className = 'pill';
+        again.textContent = 'Try again';
+        again.addEventListener('click', () => retryPack?.(pack.key));
+        empty.appendChild(again);
+      } else if (pack) {
+        empty.textContent = `You have set aside every card on ${pack.name}.`;
       } else {
         empty.append('Nothing here with your current choices. ');
         const a = document.createElement('a');
@@ -123,7 +149,9 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
       s.innerHTML = '<div class="cover"></div><div class="card-body"><span class="bar w40"></span><span class="bar w80"></span><span class="bar w60"></span></div>';
       cardsEl.appendChild(s);
     }
-    pillsEl.hidden = true;
+    // Hold the pills' row open so the cards do not drop when the list lands.
+    pillsEl.hidden = false;
+    pillsEl.innerHTML = '';
     moreBtn.hidden = true;
   }
 
@@ -133,7 +161,9 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     const all = ranked(null);
     const cats = CATEGORIES.filter(c => p.catPrefs[c.id] !== 'hide' && all.some(x => x.category === c.id));
     const savedCount = saved().length;
-    if (pill && pill !== 'saved' && !cats.some(c => c.id === pill)) pill = null;
+    const mine = packs().filter(p => p.status !== 'unsuitable');
+    if (pill && pill !== 'saved' && !pill.startsWith('pack:') && !cats.some(c => c.id === pill)) pill = null;
+    if (pill?.startsWith('pack:') && !mine.some(p => `pack:${p.key}` === pill)) pill = null;
     pillsEl.hidden = false;
     pillsEl.innerHTML = '';
     const make = (id, name, hue) => {
@@ -152,6 +182,12 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     };
     make(null, 'For you');
     if (savedCount || pill === 'saved') make('saved', `Saved · ${savedCount}`);
+    for (const p of mine) {
+      const hue = p.cards[0] ? categoryById(p.cards[0].category).hue : undefined;
+      make(`pack:${p.key}`, p.status === 'loading' && !p.cards.length ? `${p.name} …` : p.name, hue);
+      pillsEl.lastElementChild.classList.add('pack-pill');
+      if (p.status === 'loading') pillsEl.lastElementChild.classList.add('loading');
+    }
     for (const c of cats) make(c.id, c.name, c.hue);
     const tune = document.createElement('a');
     tune.className = 'pill-tune';
@@ -280,7 +316,9 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     body.className = 'card-body';
     const kicker = document.createElement('span');
     kicker.className = 'kicker';
-    const second = KINDS[c.kind] || (c.origin !== 'timeless' ? ORIGINS[c.origin] : '');
+    const second = c.packName
+      ? (packOf() ? STEPS[c.step] || c.packName : c.packName)
+      : KINDS[c.kind] || (c.origin !== 'timeless' ? ORIGINS[c.origin] : '');
     kicker.textContent = c.sponsored ? `Sponsored · ${c.sponsor}` : cat.name + (second ? ` · ${second}` : '');
     const title = document.createElement('h3');
     title.className = 'card-title';
@@ -583,11 +621,21 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     render,
     // Preferences changed somewhere else (settings page, another browser).
     refresh,
+    // A pack arrived or changed: show it if it is on screen, update the pills.
+    packChanged(key) {
+      if (pill === `pack:${key}`) { frozen = null; render(); } else render();
+    },
     // Re-aim every link after the prompt or engine changes, without rebuilding.
     reaim() { root.querySelectorAll('a[data-kind]').forEach(aim); },
     topics: () => shown.map(c => c.topic),
     hasFeed: () => !!feed,
   };
+}
+
+// A pack's cards along its path: ways in, then deeper, then rabbit holes.
+const STEP_ORDER = { start: 0, deeper: 1, rabbithole: 2 };
+function pathOrder(cards) {
+  return cards.map((c, i) => [c, i]).sort((a, b) => (STEP_ORDER[a[0].step] ?? 1) - (STEP_ORDER[b[0].step] ?? 1) || a[1] - b[1]).map(x => x[0]);
 }
 
 function readDismissed() {

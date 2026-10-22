@@ -295,9 +295,11 @@ kbd { font-family: var(--sans); font-size: 11px; color: var(--ink-2); border: 1p
 .launching .sentence { border-bottom-color: var(--accent); }
 
 /* Previews from Explore: a layer over the sentence, the same size, with the
-   sentence's words hidden underneath but still holding their place. */
+   sentence's words faded out underneath but still holding their place. */
 .ask { position: relative; }
-.sentence.under-preview > * { visibility: hidden; }
+/* opacity, not visibility: a hidden input would lose focus, and someone
+   typing while their mouse crosses a card must keep their place. */
+.sentence.under-preview > * { opacity: 0; transition: none; }
 .sentence-preview {
   position: absolute;
   left: 0; right: 0;
@@ -361,7 +363,7 @@ kbd { font-family: var(--sans); font-size: 11px; color: var(--ink-2); border: 1p
 .explore-foot { color: var(--ink-3); font-size: 11.5px; margin: 16px 0 0; }
 
 /* Pills: For you, then each category; Tune goes to the settings. */
-.pills { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -2px 0 16px; }
+.pills { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -2px 0 16px; min-height: 30px; }
 .topic-pill {
   padding: 5px 12px;
   border-radius: 999px;
@@ -407,7 +409,16 @@ kbd { font-family: var(--sans); font-size: 11px; color: var(--ink-2); border: 1p
 }
 .picker .chip { font-size: 12px; padding: 3px 10px 3px 8px; }
 
-.explore-empty { grid-column: 1 / -1; color: var(--ink-2); margin: 8px 0; }
+.explore-empty { grid-column: 1 / -1; color: var(--ink-2); margin: 8px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.explore-empty.waiting { font-family: var(--serif); font-size: 17px; color: var(--ink-2); padding: 28px 4px; animation: breathe 1.8s ease-in-out infinite; }
+.topic-pill.pack-pill { font-family: var(--serif); font-size: 13.5px; font-style: italic; }
+.topic-pill.loading { animation: breathe 1.4s ease-in-out infinite; }
+.pack-status { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pack-chip { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--ink-2); }
+.pack-chip.loading { animation: breathe 1.4s ease-in-out infinite; }
+.pack-chip.ready { color: var(--ink); }
+.pack-chip.unsuitable, .pack-chip.error { color: var(--danger); border-style: dashed; }
+.pack-chip .quiet { padding: 0 4px; font-size: 12px; }
 .explore-empty a { color: var(--accent); }
 
 /* A card's ⋯ menu, and what it says back. */

@@ -57,3 +57,6 @@ export const KINDS = {
 };
 
 export const DEPTHS = { quick: '5-minute', deep: 'Deep dive' };
+
+// Where a card sits on the path through an interest someone asked for.
+export const STEPS = { start: 'Start here', deeper: 'Go deeper', rabbithole: 'Rabbit hole' };

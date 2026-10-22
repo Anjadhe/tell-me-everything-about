@@ -9,7 +9,7 @@
 
 import { merge, normalize, sameState } from '../public/merge.js';
 import { ENGINE_IDS, LAUNCH_FROM, tagRows, lastDays } from './usage.js';
-import { generate, evergreenFeed, sponsoredCard } from './explore.js';
+import { generate, evergreenFeed, sponsoredCard, interestKey, generateInterest, PACK_FRESH_DAYS } from './explore.js';
 
 const SESSION_COOKIE = 'tmea_session';
 const SESSION_DAYS = 90;
@@ -19,6 +19,14 @@ const LINKS_PER_IP_PER_HOUR = 20;
 const MAX_STATE_BYTES = 192 * 1024; // prompts, settings, and up to 150 saved cards
 const EXPLORE_KEEP_DAYS = 30;
 const EXPLORE_EDGE_SECONDS = 900;
+// Cards for visitors' own interests: Claude calls a day, in all and per
+// visitor (by a hash of the address and the day, never kept with the
+// interest). A pack nobody has asked for in this long is dropped.
+const INTEREST_GENERATIONS_PER_DAY = 300;
+const INTEREST_GENERATIONS_PER_VISITOR = 20;
+const INTEREST_KEEP_DAYS = 90;
+// How many of the most asked-for interests lend cards to the daily list.
+const POPULAR_PACKS = 10;
 
 export default {
   async fetch(request, env, ctx) {
@@ -60,6 +68,7 @@ async function route(request, env, ctx, url) {
   if (pathname === '/api/explore' && method === 'GET') return getExplore(request, env, ctx);
   if (pathname === '/api/admin/explore' && method === 'POST') return adminExplore(request, env);
   if (pathname === '/api/sponsored' && method === 'POST') return countSponsored(request, env, ctx);
+  if (pathname === '/api/interest' && method === 'POST') return interestCards(request, env, ctx);
   return json({ error: 'Not found.' }, 404);
 }
 
@@ -221,13 +230,14 @@ async function adminUsage(request, env) {
 
   const days = lastDays(14);
   const since = days[0];
-  const [accounts, signins, launches, froms, explore, sponsoredRows] = await env.DB.batch([
+  const [accounts, signins, launches, froms, explore, sponsoredRows, interests] = await env.DB.batch([
     env.DB.prepare('SELECT (SELECT COUNT(*) FROM users) AS users, (SELECT COUNT(*) FROM sessions WHERE expires_at > ?) AS sessions').bind(new Date().toISOString()),
     env.DB.prepare("SELECT substr(used_at, 1, 10) AS day, COUNT(*) AS n FROM magic_links WHERE used_at IS NOT NULL AND used_at >= ? GROUP BY day").bind(since),
     env.DB.prepare("SELECT day, key, n FROM counters WHERE kind = 'launch' AND day >= ?").bind(since),
     env.DB.prepare("SELECT key, SUM(n) AS n FROM counters WHERE kind = 'from' AND day >= ? GROUP BY key").bind(since),
     env.DB.prepare('SELECT day, created_at, data FROM explore ORDER BY day DESC LIMIT 1'),
     env.DB.prepare("SELECT kind, key, SUM(n) AS n FROM counters WHERE kind IN ('sponsored-view', 'sponsored-click') AND day >= ? GROUP BY kind, key").bind(since),
+    env.DB.prepare('SELECT name, hits, suitable FROM interest_packs WHERE alias_of IS NULL ORDER BY hits DESC LIMIT 25'),
   ]);
 
   const launchByDay = Object.fromEntries(days.map(d => [d, 0]));
@@ -267,6 +277,7 @@ async function adminUsage(request, env) {
     launchByEngine,
     launchFrom,
     sponsored,
+    interests: interests.results,
     explore: exploreInfo,
     traffic,
   });
@@ -343,12 +354,14 @@ async function refreshExplore(env) {
     const history = rows.results.map(r => {
       try { return { day: r.day, cards: JSON.parse(r.data).cards || [] }; } catch { return { day: r.day, cards: [] }; }
     });
-    const feed = await generate(env, day, { history });
+    const extras = await popularPackCards(env, day);
+    const feed = await generate(env, day, { history, extras });
     const cutoff = new Date(Date.now() - EXPLORE_KEEP_DAYS * 86400_000).toISOString().slice(0, 10);
     await env.DB.batch([
       env.DB.prepare('INSERT INTO explore (day, data, created_at) VALUES (?, ?, ?) ON CONFLICT(day) DO UPDATE SET data = excluded.data, created_at = excluded.created_at')
         .bind(day, JSON.stringify(feed), new Date().toISOString()),
       env.DB.prepare('DELETE FROM explore WHERE day < ?').bind(cutoff),
+      env.DB.prepare('DELETE FROM interest_packs WHERE last_used < ?').bind(new Date(Date.now() - INTEREST_KEEP_DAYS * 86400_000).toISOString()),
     ]);
     const fresh = feed.cards.filter(c => !c.carried).length;
     console.log(JSON.stringify({ level: 'info', event: 'explore_written', day, model: feed.model, cards: fresh, carried: feed.cards.length - fresh }));
@@ -368,6 +381,109 @@ async function countSponsored(request, env, ctx) {
   if (!id || !event) return new Response(null, { status: 204 });
   ctx.waitUntil(bump(env, today(), `sponsored-${event}`, id));
   return new Response(null, { status: 204 });
+}
+
+// ---------- interests ----------
+
+// A visitor's own interest, typed in settings. The page sends the text and
+// nothing else: no cookie, no account. If the library has a pack for it,
+// that comes back at once (and is refreshed in the background once a week);
+// otherwise Claude writes one, within the daily caps, and it joins the
+// library for the next person who types the same thing.
+async function interestCards(request, env, ctx) {
+  const body = await readJson(request);
+  const text = typeof body?.q === 'string' ? body.q : '';
+  const key = interestKey(text);
+  if (!key) return json({ error: 'Type a few words about what interests you.' }, 400);
+  const now = new Date();
+  let row = await env.DB.prepare('SELECT * FROM interest_packs WHERE key = ?').bind(key).first();
+  if (row?.alias_of) {
+    ctx.waitUntil(env.DB.prepare('UPDATE interest_packs SET last_used = ? WHERE key = ?').bind(now.toISOString(), key).run());
+    row = await env.DB.prepare('SELECT * FROM interest_packs WHERE key = ?').bind(row.alias_of).first();
+  }
+  if (row) {
+    ctx.waitUntil(env.DB.prepare('UPDATE interest_packs SET hits = hits + 1, last_used = ? WHERE key = ?').bind(now.toISOString(), row.key).run());
+    if (!row.suitable) return json({ key, suitable: false });
+    const cards = JSON.parse(row.data);
+    const stale = Date.now() - Date.parse(row.created_at) > PACK_FRESH_DAYS * 86400_000;
+    if (stale && env.ANTHROPIC_API_KEY && (await withinCaps(env, request))) {
+      ctx.waitUntil(writePack(env, row.key, row.name, cards.map(c => c.topic)).catch(() => {}));
+    }
+    return json({ key, suitable: true, name: row.name, cards });
+  }
+  if (!env.ANTHROPIC_API_KEY) return json({ error: 'Cards for your own interests are not switched on here yet.' }, 503);
+  if (!(await withinCaps(env, request))) return json({ error: 'Explore has written a lot of new cards today. Try this one again tomorrow.' }, 429);
+  try {
+    const pack = await newPack(env, key, text);
+    return json(pack.suitable ? { key, suitable: true, name: pack.name, cards: pack.cards } : { key, suitable: false });
+  } catch (err) {
+    console.error(JSON.stringify({ level: 'error', event: 'interest_failed', key, message: err?.message }));
+    return json({ error: 'Could not write cards for that just now. Try again in a little while.' }, 502);
+  }
+}
+
+// Counts this call against the caps, if there is room. The visitor is a
+// hash of address and day, kept only as a count.
+async function withinCaps(env, request) {
+  const day = today();
+  const visitor = (await sha256(`${day}:${request.headers.get('cf-connecting-ip') || ''}`)).slice(0, 16);
+  const [all, mine] = await env.DB.batch([
+    env.DB.prepare("SELECT n FROM counters WHERE day = ? AND kind = 'interest-gen' AND key = 'all'").bind(day),
+    env.DB.prepare("SELECT n FROM counters WHERE day = ? AND kind = 'interest-visitor' AND key = ?").bind(day, visitor),
+  ]);
+  if ((all.results[0]?.n || 0) >= INTEREST_GENERATIONS_PER_DAY) return false;
+  if ((mine.results[0]?.n || 0) >= INTEREST_GENERATIONS_PER_VISITOR) return false;
+  await Promise.all([bump(env, day, 'interest-gen', 'all'), bump(env, day, 'interest-visitor', visitor)]);
+  return true;
+}
+
+// A first pack for what was typed. Claude also says what the interest is
+// usually called; if the library already has a pack under that name, this
+// way of typing it becomes an alias and the existing pack is used, so
+// "History of India" and "Indian history" share one set of cards.
+async function newPack(env, key, text) {
+  const pack = await generateInterest(env, key, text);
+  const canonical = pack.suitable ? interestKey(pack.name) : null;
+  if (!canonical || canonical === key) return storePack(env, key, pack);
+  const existing = await env.DB.prepare('SELECT * FROM interest_packs WHERE key = ? AND alias_of IS NULL').bind(canonical).first();
+  const now = new Date().toISOString();
+  if (existing?.suitable) {
+    await env.DB.prepare('INSERT OR REPLACE INTO interest_packs (key, name, suitable, data, created_at, last_used, hits, alias_of) VALUES (?, ?, 1, ?, ?, ?, 1, ?)')
+      .bind(key, existing.name, '[]', now, now, canonical).run();
+    return { suitable: true, name: existing.name, cards: JSON.parse(existing.data) };
+  }
+  const cards = pack.cards.map(c => ({ ...c, id: c.id.replace(`in-${key}-`, `in-${canonical}-`), pack: canonical }));
+  await storePack(env, canonical, { ...pack, cards });
+  await env.DB.prepare('INSERT OR REPLACE INTO interest_packs (key, name, suitable, data, created_at, last_used, hits, alias_of) VALUES (?, ?, 1, ?, ?, ?, 0, ?)')
+    .bind(key, pack.name, '[]', now, now, canonical).run();
+  return { ...pack, cards };
+}
+
+async function writePack(env, key, text, avoid) {
+  return storePack(env, key, await generateInterest(env, key, text, { avoid }));
+}
+
+async function storePack(env, key, pack) {
+  const now = new Date().toISOString();
+  await env.DB.prepare(
+    `INSERT INTO interest_packs (key, name, suitable, data, created_at, last_used, hits) VALUES (?, ?, ?, ?, ?, ?, 1)
+     ON CONFLICT(key) DO UPDATE SET name = excluded.name, suitable = excluded.suitable, data = excluded.data, created_at = excluded.created_at`
+  ).bind(key, pack.name || key.replace(/-/g, ' '), pack.suitable ? 1 : 0, JSON.stringify(pack.cards), now, now).run();
+  return pack;
+}
+
+// Two cards a day from each of the most asked-for interests, turning
+// through each pack, so what many people are curious about reaches everyone.
+async function popularPackCards(env, day) {
+  const rows = await env.DB.prepare('SELECT data FROM interest_packs WHERE suitable = 1 AND alias_of IS NULL AND hits >= 2 ORDER BY hits DESC LIMIT ?').bind(POPULAR_PACKS).all();
+  const turn = Math.floor(Date.parse(`${day}T00:00:00Z`) / 86400_000);
+  const out = [];
+  for (const r of rows.results) {
+    let cards = [];
+    try { cards = JSON.parse(r.data); } catch { continue; }
+    for (let i = 0; i < Math.min(2, cards.length); i++) out.push(cards[(turn * 2 + i) % cards.length]);
+  }
+  return out;
 }
 
 // Run the daily job now, for the first deploy or after changing the prompt.

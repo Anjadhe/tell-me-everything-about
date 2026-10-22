@@ -13,7 +13,7 @@
 //   mix        { timely: 0..1, surprising: 0..1 }   0.5 is no preference
 //   onboarded  true once the first-run picker is done or skipped
 
-import { CATEGORY_IDS, TAG_IDS, tagById } from './categories.js?v=8f1b98feb3';
+import { CATEGORY_IDS, TAG_IDS, tagById } from './categories.js?v=e7992f0abd';
 
 const TAG_MIN = -3, TAG_MAX = 3;
 
@@ -74,6 +74,7 @@ export function score(card, index, total, prefs, terms) {
   s += (timely ? 1 : -1) * (prefs.mix.timely - 0.5) * 2;
   s += (card.surprise === 'surprising' ? 1 : -1) * (prefs.mix.surprising - 0.5) * 2;
   if (card.carried) s -= 0.4;
+  if (card.pack) s += 1;                                                // asked for by name
   return s;
 }
 
@@ -89,7 +90,27 @@ export function rank(cards, prefs, { dismissed = new Set(), seenBefore = new Set
     (!category || c.category === category));
   const scored = pool.map((c, i) => ({ c, s: score(c, i, pool.length, prefs, terms) }));
   scored.sort((a, b) => b.s - a.s);
-  return category ? scored.map(x => x.c) : spread(scored.map(x => x.c));
+  return category ? scored.map(x => x.c) : paceInterests(spread(scored.map(x => x.c)));
+}
+
+// Cards from the visitor's own interests lead often but never take over:
+// at most one in every PACK_EVERY places in the mixed list. Their own pill
+// shows them all.
+export const PACK_EVERY = 4;
+
+export function paceInterests(list) {
+  const at = new Map(list.map((c, i) => [c, i]));
+  const own = list.filter(c => c.pack);
+  const rest = list.filter(c => !c.pack);
+  const out = [];
+  let since = PACK_EVERY;                 // other cards since the last interest card
+  while (own.length || rest.length) {
+    const p = own[0], r = rest[0];
+    const takeOwn = p && (!r || (since >= PACK_EVERY - 1 && at.get(p) < at.get(r)));
+    if (takeOwn) { out.push(own.shift()); since = 0; }
+    else { out.push(rest.shift()); since++; }
+  }
+  return out;
 }
 
 // Keep the best first, but don't let one category take more than two places
@@ -154,4 +175,13 @@ export function placeSponsored(list, sponsored, prefs, { dismissed = new Set(), 
     if (fit[i] && out.length >= slot) out.splice(slot, 0, fit[i]);
   });
   return out;
+}
+
+// The library key for an interest, the same as the Worker's interestKey
+// (src/explore.js?v=e7992f0abd; a test keeps them equal).
+export function interestKeyOf(text) {
+  const s = String(text || '').normalize('NFKC').trim().replace(/\s+/g, ' ');
+  if (s.length < 2 || s.length > 60) return null;
+  const key = s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+  return key.length >= 2 ? key : null;
 }

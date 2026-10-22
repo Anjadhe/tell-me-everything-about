@@ -3,13 +3,14 @@
 //
 // Everything saves as you type. A new prompt is kept once it has words.
 
-import * as store from './store.js?v=8f1b98feb3';
-import { ENGINES, engineById } from './engines.js?v=8f1b98feb3';
-import { describe, AUTO_FILLS, autoValues, fill, defaultLabel, highlight, parse } from './template.js?v=8f1b98feb3';
-import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=8f1b98feb3';
-import { CATEGORIES, categoryById, KINDS } from './categories.js?v=8f1b98feb3';
-import { prefsFrom, tagState, cycleTag } from './interests.js?v=8f1b98feb3';
-import { forgetLocal } from './explore.js?v=8f1b98feb3';
+import * as store from './store.js?v=e7992f0abd';
+import { ENGINES, engineById } from './engines.js?v=e7992f0abd';
+import { describe, AUTO_FILLS, autoValues, fill, defaultLabel, highlight, parse } from './template.js?v=e7992f0abd';
+import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=e7992f0abd';
+import { CATEGORIES, categoryById, KINDS } from './categories.js?v=e7992f0abd';
+import { prefsFrom, tagState, cycleTag } from './interests.js?v=e7992f0abd';
+import { forgetLocal } from './explore.js?v=e7992f0abd';
+import { packsFor, ensurePacks, retryPack } from './packs.js?v=e7992f0abd';
 
 const EXAMPLES = [
   { label: 'Compare', template: 'Compare {thing} with {other thing}: how they differ, where each one wins, and which to choose when' },
@@ -644,6 +645,7 @@ function renderExploreSettings() {
   if (document.activeElement !== kw) kw.value = p.keywords;
   $('#s-timely').value = String(Math.round((1 - p.mix.timely) * 100));
   $('#s-surprising').value = String(Math.round(p.mix.surprising * 100));
+  loadPacks();
 }
 
 let keywordsTimer = null;
@@ -651,6 +653,37 @@ $('#s-keywords').addEventListener('input', e => {
   clearTimeout(keywordsTimer);
   keywordsTimer = setTimeout(() => store.updateSettings({ keywords: e.target.value }), 400);
 });
+// Asking for packs waits until the box is left, not every keystroke.
+$('#s-keywords').addEventListener('change', e => {
+  clearTimeout(keywordsTimer);
+  store.updateSettings({ keywords: e.target.value });
+  loadPacks();
+});
+
+function loadPacks() {
+  ensurePacks(store.setting('keywords', ''), renderPackStatus);
+  renderPackStatus();
+}
+
+function renderPackStatus() {
+  const el = $('#s-packs');
+  el.innerHTML = '';
+  for (const p of packsFor(store.setting('keywords', ''))) {
+    const row = document.createElement('span');
+    row.className = `pack-chip ${p.status}`;
+    const label = { loading: 'writing cards…', ready: `${p.cards.length} cards`, unsuitable: 'not something Explore can write about', error: p.error || 'could not get cards' }[p.status];
+    row.textContent = `${p.name} · ${label}`;
+    if (p.status === 'error') {
+      const again = document.createElement('button');
+      again.type = 'button';
+      again.className = 'quiet';
+      again.textContent = 'Try again';
+      again.addEventListener('click', () => retryPack(p.key));
+      row.appendChild(again);
+    }
+    el.appendChild(row);
+  }
+}
 // The slider reads left to right as Timely to Timeless; the setting is how
 // much to favour timely cards.
 function saveMix() {

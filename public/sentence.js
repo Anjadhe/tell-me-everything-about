@@ -2,7 +2,7 @@
 // and what fills itself in. The home page and the prompts page's preview
 // both use it, so the preview is the real thing.
 
-import { parse, autoValues, AUTO_FILLS } from './template.js?v=8f1b98feb3';
+import { parse, autoValues, AUTO_FILLS } from './template.js?v=e7992f0abd';
 
 // Rebuilds el's sentence (anything marked .keep stays). values: { [blankId]:
 // text }. Returns the distinct blanks and every input in order; a blank used
@@ -31,7 +31,7 @@ export function buildSentence(el, template, { values = {}, autos = autoValues() 
       const input = document.createElement('input');
       input.type = 'text';
       // One character of intrinsic width: the slot sizes itself to the text
-      // (app.css?v=8f1b98feb3), and a default-width input would hold a whole line open.
+      // (app.css?v=e7992f0abd), and a default-width input would hold a whole line open.
       input.size = 1;
       input.value = v;
       input.dataset.blank = p.id;

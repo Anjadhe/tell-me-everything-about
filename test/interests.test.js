@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { prefsFrom, rank, spread, feedback, tagState, cycleTag, keywordList, matches, placeSponsored, SPONSOR_SLOTS } from '../public/interests.js';
+import { prefsFrom, rank, spread, feedback, tagState, cycleTag, keywordList, matches, placeSponsored, SPONSOR_SLOTS, paceInterests } from '../public/interests.js';
 
 const settings = (s = {}) => (k, fallback) => (s[k] === undefined ? fallback : s[k]);
 const c = (id, category, over = {}) => ({ id, topic: id, hook: '', angle: '', category, tags: [], origin: 'timeless', surprise: 'familiar', ...over });
@@ -100,4 +100,19 @@ test('sponsored cards go only in their slots, best match first, never against th
   assert.equal(placeSponsored(list.slice(0, 2), sponsored, p).length, 2);
   assert.equal(placeSponsored(list, sponsored, p, { dismissed: new Set(['sp-b', 'sp-a']) }).filter(x => x.sponsored).length, 0);
   assert.deepEqual(placeSponsored(list, sponsored, p, { category: 'science' }).filter(x => x.sponsored).map(x => x.id), ['sp-b']);
+});
+
+test('cards from an interest the visitor named rank above ones they did not', () => {
+  const cards = [c('a', 'science'), c('in-x-b', 'history', { pack: 'x' })];
+  assert.equal(rank(cards, prefsFrom(settings()))[0].id, 'in-x-b');
+});
+
+test('interest cards come at most once in every four places in the mix', () => {
+  const list = [...Array.from({ length: 6 }, (_, i) => c(`p${i}`, 'history', { pack: 'x' })), ...Array.from({ length: 12 }, (_, i) => c(`d${i}`, 'science'))];
+  const out = paceInterests(list).map(x => x.id);
+  assert.equal(out[0], 'p0');
+  const lastOther = out.findLastIndex(id => id.startsWith('d'));
+  const at = out.map((id, i) => (id.startsWith('p') && i < lastOther ? i : -1)).filter(i => i >= 0);
+  for (let i = 1; i < at.length; i++) assert.ok(at[i] - at[i - 1] >= 4, out.join(','));
+  assert.equal(out.length, list.length);
 });
