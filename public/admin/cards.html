@@ -7,7 +7,7 @@
 <meta name="robots" content="noindex">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/app.css?v=3db8e47be6">
+<link rel="stylesheet" href="/app.css?v=5e11922ad2">
 <script>try{var t=localStorage.getItem('tmea:theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
 <style>
   .cm { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 40px; align-items: start; width: min(100%, 1120px); margin: 20px auto 60px; }
@@ -35,6 +35,8 @@
   .cm-row .acts { display: flex; gap: 4px; }
   .cm-empty { color: var(--ink-2); padding: 18px 2px; }
   .cm-error { color: var(--danger); font-size: 12.5px; min-height: 18px; margin: 6px 0; }
+  .gen { max-width: 520px; margin: 0 0 6px; }
+  .gen input { flex: 1; }
 
   /* Editor: a sheet with the live card on top. */
   .editor-sheet { width: min(100%, 560px); }
@@ -99,8 +101,8 @@
       <select id="day" aria-label="Day" hidden></select>
       <a class="pp-item" href="#pinned" data-c="pinned"><span class="n">Pinned</span><span class="s">Editor’s picks, on top</span></a>
       <a class="pp-item" href="#sponsored" data-c="sponsored"><span class="n">Sponsored</span><span class="s">Labelled, placed in browsers</span></a>
-      <span class="group">Interests</span>
-      <a class="pp-item" href="#packs" data-c="packs"><span class="n">Interest packs</span><span class="s" id="n-packs"></span></a>
+      <span class="group">Collections</span>
+      <a class="pp-item" href="#packs" data-c="packs"><span class="n">Collections</span><span class="s" id="n-packs"></span></a>
     </nav>
 
     <div>
@@ -110,6 +112,11 @@
         <div class="actions" id="actions"></div>
       </header>
       <p class="cm-note" id="note"></p>
+      <form id="gen-form" class="field gen" hidden>
+        <input type="text" id="gen-term" class="ed-input" maxlength="60" placeholder="A subject, like Roman history" aria-label="Subject for a new collection">
+        <button type="submit" class="pill solid" id="gen-go">Generate</button>
+      </form>
+      <p class="cm-note" id="gen-status" aria-live="polite"></p>
       <input type="search" id="search" class="ed-input cm-search" placeholder="Find a card" aria-label="Find a card">
       <p class="cm-error" id="list-error" role="alert"></p>
       <ol class="cm-list" id="list"></ol>
@@ -134,6 +141,6 @@
   </form>
 </dialog>
 
-<script type="module" src="/admin-cards.js?v=3db8e47be6"></script>
+<script type="module" src="/admin-cards.js?v=5e11922ad2"></script>
 </body>
 </html>

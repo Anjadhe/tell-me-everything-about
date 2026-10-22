@@ -1,17 +1,16 @@
 // Tell me everything about — the home page: a sentence to finish.
 //
-// State, sync and the account live in store.js?v=3db8e47be6, shared with the prompts
+// State, sync and the account live in store.js?v=5e11922ad2, shared with the prompts
 // page (/prompts) where prompts are written and settings are kept. This page
 // draws the selected prompt as a sentence with a box for each blank, launches
 // it, and shows Explore under it.
 
-import * as store from './store.js?v=3db8e47be6';
-import { ENGINES, engineById } from './engines.js?v=3db8e47be6';
-import { parse, fill, defaultLabel, autoValues } from './template.js?v=3db8e47be6';
-import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=3db8e47be6';
-import { createExplore } from './explore.js?v=3db8e47be6';
-import { prefsFrom } from './interests.js?v=3db8e47be6';
-import { packsFor, ensurePacks, retryPack } from './packs.js?v=3db8e47be6';
+import * as store from './store.js?v=5e11922ad2';
+import { ENGINES, engineById } from './engines.js?v=5e11922ad2';
+import { parse, fill, defaultLabel, autoValues } from './template.js?v=5e11922ad2';
+import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=5e11922ad2';
+import { createExplore } from './explore.js?v=5e11922ad2';
+import { prefsFrom } from './interests.js?v=5e11922ad2';
 
 const FEED_KEY = 'tmea:explore-feed';
 const FEED_FRESH_MS = 30 * 60 * 1000;
@@ -321,8 +320,6 @@ function renderExplore() {
     updatePrefs: patch => store.updateSettings(patch),
     recent: store.recentTopics,
     report: countSponsored,
-    packs: () => packsFor(store.setting('keywords', '')),
-    retryPack,
     saved: store.savedCards,
     isSaved: store.isSaved,
     toggleSave(card) {
@@ -339,12 +336,6 @@ function renderExplore() {
     },
   });
   loadFeed();
-  loadPacks();
-}
-
-// Cards for the visitor's own interests, written on the server (packs.js?v=3db8e47be6).
-function loadPacks() {
-  ensurePacks(store.setting('keywords', ''), key => explore?.packChanged(key));
 }
 
 // The list is the same for everyone and changes once a day, so the page shows
@@ -421,7 +412,7 @@ function clearPreview() {
 
 // The first box's grey text: the blank's name, or the current suggestion.
 // A suggestion sits in a box of fixed width, smaller and on one line, so a
-// long topic can never rewrap the sentence and move the page (app.css?v=3db8e47be6).
+// long topic can never rewrap the sentence and move the page (app.css?v=5e11922ad2).
 function paintGhost() {
   const ghost = ghostOf(inputs[0]);
   if (!ghost) return;
@@ -536,7 +527,7 @@ store.subscribe(what => {
     selectedId = store.selectedId() || selectedId;
     renderTabs();
     renderSentence();
-    if (explore && exploreOn()) { explore.refresh(); loadPacks(); } else renderExplore();
+    if (explore && exploreOn()) explore.refresh(); else renderExplore();
   }
 });
 

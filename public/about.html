@@ -7,7 +7,7 @@
 <meta name="description" content="What Tell me everything about is, how it works, and what it keeps.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/app.css?v=3db8e47be6">
+<link rel="stylesheet" href="/app.css?v=5e11922ad2">
 <script>try{var t=localStorage.getItem('tmea:theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
 <style>
   .about { width: min(100%, 620px); margin: 0 auto; padding: 4vh 0 10vh; }
@@ -49,16 +49,15 @@
     <li>A prompt can have up to four named blanks, like <code>Compare {thing} with {other thing}</code>; each becomes its own box on the home page. Some placeholders fill themselves in: <code>{today}</code>, <code>{month}</code>, <code>{year}</code> and <code>{language}</code>. They are worked out in your browser.</li>
     <li>The page builds the final sentence and hands it to the engine as a normal search link. Nothing is generated here and nothing is answered here. The engine you chose does that, on its own site, under your own account there.</li>
     <li>Under the box, <strong>Explore</strong> offers topics worth a deep answer. Hover one to see the sentence it makes, click it to ask. Each card opens with whichever prompt you have selected, so the same topic can be explained simply, told in full, or brought up to date.</li>
-    <li>Explore learns what you like without telling anyone. Pick topics the first time, filter with the pills, and use a card's <strong>⋯</strong> menu for more or less like it, or to hide a topic. The rest is under <a href="/prompts#settings">Settings</a>: more, normal or hidden for each category, topics, your own interests in words, and how timely or surprising the mix is.</li>
+    <li>Choose what Explore shows under <a href="/prompts#settings/topics">Settings, Topics</a>: switch topics on or off and tick the sub-topics you want. You can also hide a topic straight from a card's <strong>⋯</strong> menu, or save a card for later.</li>
   </ul>
 
   <h2>Where Explore comes from</h2>
   <p>Once each morning the site reads what the world is looking at: Wikipedia's featured feed and most-read pages, the Hacker News front page, Reddit's Today I Learned, and sources for each subject, such as new research from Quanta, ScienceDaily, NASA and arXiv, history from Smithsonian, new books, films and music from NPR and Open Library, BBC Sport, The Conversation and Aeon. Claude chooses about ten topics for each category and writes a line about each, leaving out anything used in the last two weeks.</p>
-  <p>Everyone gets the same list, fetched without a cookie. Your browser then picks and orders cards from it using your choices. Those choices sync with your settings when you are signed in, but they are never sent to Claude and never used to choose the list. Cards you set aside, and which cards you have already seen, are kept in this browser only.</p>
+  <p>Everyone gets the same list, fetched without a cookie. Your browser then picks and orders cards from it using the topics you chose. Those choices sync with your settings when you are signed in, but they are never sent to Claude and never used to choose the list. Cards you set aside, and which cards you have already seen, are kept in this browser only.</p>
 
-  <h2>Your own interests</h2>
-  <p>You can tell Explore what you are curious about in your own words, such as <em>Roman history</em> or <em>sourdough</em>. For each one, Claude writes a short learning path on our server: ways in, then the ideas that make the subject click, then the rabbit holes. It gets its own pill on the home page.</p>
-  <p>This is the one part of Explore where words you typed reach the site. Your browser sends the interest's words and nothing else: no cookie, no account, nothing that says who you are. The cards are kept in a shared library and given to anyone else who asks for the same interest, and the most asked-for interests lend a few cards to everyone's daily list. The site keeps how many times each interest was asked for, never by whom. If you would rather not send them, leave the box empty; everything else still works.</p>
+  <h2>Collections</h2>
+  <p>Some subjects get a collection: a short learning path written by Claude, from ways in to the ideas that make the subject click to the rabbit holes. Collections are chosen and checked by the site's editor, and every one is the same for everyone. Switch any of them on in Topics to give it its own pill; each one also lends a couple of cards a day to everyone's list.</p>
 
   <h2>Sponsored cards</h2>
   <p>Some cards may be sponsored, and they are always labelled. Sponsored cards come to every visitor in the same list as everything else. Your browser decides whether one fits you, by the same rules as other cards, and never shows one in a category or topic you have hidden. The sponsor learns how many times their card was shown and clicked, counted the same anonymous way as launches: no cookie, no identifier, nothing about you. A card's <strong>⋯</strong> menu says why it is there and lets you set it aside.</p>

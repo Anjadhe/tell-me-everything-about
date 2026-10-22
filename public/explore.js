@@ -8,16 +8,16 @@
 // first box instead.
 //
 // Which cards, in what order, is decided here in the browser from the
-// visitor's preferences (interests.js?v=3db8e47be6). Feedback hides or nudges without
+// visitor's preferences (interests.js?v=5e11922ad2). Feedback hides or nudges without
 // reshuffling what is on screen: the order is fixed until the visitor picks
-// another pill, finishes the picker, or comes back later.
+// another pill or comes back later.
 //
 // There are no images. Each card gets a cover drawn from its category (orbits
 // for science, strata for history, …), varied by a seed from the topic so no
 // two look alike, with the card's one striking figure set large on top.
 
-import { CATEGORIES, categoryById, tagById, ORIGINS, KINDS, DEPTHS, STEPS } from './categories.js?v=3db8e47be6';
-import { rank, feedback, placeSponsored, hidden } from './interests.js?v=3db8e47be6';
+import { CATEGORIES, categoryById, tagById, ORIGINS, KINDS, DEPTHS, STEPS } from './categories.js?v=5e11922ad2';
+import { rank, placeSponsored, visible, setCategory, setTag, topicsValue } from './interests.js?v=5e11922ad2';
 
 // Three rows to start (the wide lead card, then three and three); each
 // "Show more" adds two rows under them.
@@ -31,11 +31,10 @@ const SEEN_KEY = 'tmea:explore-seen';
 const SEEN_DAYS = 21;
 const VIEWED_KEY = 'tmea:sponsored-viewed';
 
-export function createExplore({ root, link, fill, preview, clearPreview, launched, prefs, updatePrefs, recent, report, saved, isSaved, toggleSave, packs = () => [], retryPack, tuneHref = '/prompts#settings' }) {
+export function createExplore({ root, link, fill, preview, clearPreview, launched, prefs, updatePrefs, recent, report, saved, isSaved, toggleSave, tuneHref = '/prompts#settings/topics' }) {
   const cardsEl = root.querySelector('.cards');
   const recentEl = root.querySelector('.recent');
   const pillsEl = root.querySelector('.pills');
-  const pickerEl = root.querySelector('.picker');
   const dateEl = root.querySelector('.explore-date');
   const footEl = root.querySelector('.explore-foot');
   const moreBtn = root.querySelector('.explore-more');
@@ -56,12 +55,18 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
   let pill = null;        // a category, 'saved', 'pack:<key>', or null for "For you"
   let frozen = null;      // card ids in the order first shown
 
-  // The day's list plus cards from the visitor's own interests.
+  // The day's list plus cards from the collections the visitor switched on.
   function ranked(category = pill) {
     if (!feed) return [];
     const ids = new Set();
-    const own = packs().filter(p => p.status === 'ready').flatMap(p => pathOrder(p.cards)).filter(c => !ids.has(c.id) && ids.add(c.id));
+    const own = packs().flatMap(p => pathOrder(p.cards)).filter(c => !ids.has(c.id) && ids.add(c.id));
     return rank([...feed.cards, ...own], prefs(), { dismissed: readDismissed(), seenBefore: seenBefore(feed.day), category });
+  }
+
+  // Collections from the card manager that the visitor switched on.
+  function packs() {
+    const on = prefs().collections;
+    return (feed?.collections || []).filter(c => on.includes(c.key));
   }
 
   function packOf(id = pill) {
@@ -91,7 +96,7 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
   function withPinned(list) {
     const p = prefs();
     const dismissed = readDismissed();
-    const pins = (feed.pinned || []).filter(c => !dismissed.has(c.id) && !hidden(c, p) && (!pill || c.category === pill));
+    const pins = (feed.pinned || []).filter(c => !dismissed.has(c.id) && visible(c, p) && (!pill || c.category === pill));
     if (!pins.length) return list;
     const ids = new Set(pins.map(c => c.id));
     return [...pins, ...list.filter(c => !ids.has(c.id))];
@@ -105,7 +110,6 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
 
   function render() {
     renderRecent();
-    renderPicker();
     if (!feed) { renderSkeleton(); return; }
     renderPills();
     const own = pill === 'saved' || packOf();
@@ -121,17 +125,6 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
       const pack = packOf();
       if (pill === 'saved') {
         empty.textContent = 'Nothing saved yet. Use the bookmark on any card to keep it here.';
-      } else if (pack?.status === 'loading') {
-        empty.className = 'explore-empty waiting';
-        empty.textContent = `Writing cards on ${pack.name}: a path from a way in to the rabbit holes. They will be here in a few seconds, and kept for anyone else curious about it too.`;
-      } else if (pack?.status === 'error') {
-        empty.textContent = `${pack.error || 'Could not get cards for this just now.'} `;
-        const again = document.createElement('button');
-        again.type = 'button';
-        again.className = 'pill';
-        again.textContent = 'Try again';
-        again.addEventListener('click', () => retryPack?.(pack.key));
-        empty.appendChild(again);
       } else if (pack) {
         empty.textContent = `You have set aside every card on ${pack.name}.`;
       } else {
@@ -187,9 +180,9 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
   function renderPills() {
     const p = prefs();
     const all = ranked(null);
-    const cats = CATEGORIES.filter(c => p.catPrefs[c.id] !== 'hide' && all.some(x => x.category === c.id));
+    const cats = CATEGORIES.filter(c => p.categories.has(c.id) && all.some(x => x.category === c.id));
     const savedCount = saved().length;
-    const mine = packs().filter(p => p.status !== 'unsuitable');
+    const mine = packs();
     if (pill && pill !== 'saved' && !pill.startsWith('pack:') && !cats.some(c => c.id === pill)) pill = null;
     if (pill?.startsWith('pack:') && !mine.some(p => `pack:${p.key}` === pill)) pill = null;
     pillsEl.hidden = false;
@@ -212,9 +205,8 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     if (savedCount || pill === 'saved') make('saved', `Saved · ${savedCount}`);
     for (const p of mine) {
       const hue = p.cards[0] ? categoryById(p.cards[0].category).hue : undefined;
-      make(`pack:${p.key}`, p.status === 'loading' && !p.cards.length ? `${p.name} …` : p.name, hue);
+      make(`pack:${p.key}`, p.name, hue);
       pillsEl.lastElementChild.classList.add('pack-pill');
-      if (p.status === 'loading') pillsEl.lastElementChild.classList.add('loading');
     }
     for (const c of cats) make(c.id, c.name, c.hue);
     const tune = document.createElement('a');
@@ -222,63 +214,6 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     tune.href = tuneHref;
     tune.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Tune';
     pillsEl.appendChild(tune);
-  }
-
-  // The first time: a row of topics to lean toward. Done or Skip, it goes.
-  function renderPicker() {
-    const p = prefs();
-    pickerEl.hidden = p.onboarded;
-    if (p.onboarded) return;
-    if (!pickerEl.childElementCount) {
-      pickerEl.innerHTML = `
-        <div class="picker-head">
-          <div>
-            <h3 class="picker-title">What are you curious about?</h3>
-            <p class="picker-sub">Pick a few and Explore leans toward them. Everything is kept in your settings, never sent to anyone.</p>
-          </div>
-          <div class="picker-actions">
-            <button type="button" class="quiet picker-skip">Skip</button>
-            <button type="button" class="pill solid picker-done">Done</button>
-          </div>
-        </div>
-        <div class="picker-groups"></div>`;
-      pickerEl.querySelector('.picker-skip').addEventListener('click', finishPicker);
-      pickerEl.querySelector('.picker-done').addEventListener('click', finishPicker);
-    }
-    const groups = pickerEl.querySelector('.picker-groups');
-    groups.innerHTML = '';
-    for (const c of CATEGORIES) {
-      const g = document.createElement('div');
-      g.className = 'picker-group';
-      g.style.setProperty('--h', c.hue);
-      const label = document.createElement('span');
-      label.className = 'picker-cat';
-      label.textContent = c.name;
-      g.appendChild(label);
-      for (const t of c.tags) {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'chip';
-        b.style.setProperty('--h', c.hue);
-        b.textContent = t.name;
-        b.setAttribute('aria-pressed', String((p.tagPrefs[t.id] || 0) > 0));
-        b.addEventListener('click', () => {
-          const cur = prefs();
-          const tagPrefs = { ...cur.tagPrefs };
-          if ((tagPrefs[t.id] || 0) > 0) delete tagPrefs[t.id]; else tagPrefs[t.id] = 2;
-          updatePrefs({ tagPrefs });
-          b.setAttribute('aria-pressed', String(!!tagPrefs[t.id]));
-        });
-        g.appendChild(b);
-      }
-      groups.appendChild(g);
-    }
-  }
-
-  function finishPicker() {
-    updatePrefs({ onboarded: true });
-    pickerEl.hidden = true;
-    refresh();
   }
 
   function renderRecent() {
@@ -411,18 +346,15 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     button.title = on ? 'Saved' : 'Save';
   }
 
-  // Save or unsave. Saving also counts as "more like this".
+  // Save or unsave.
   function toggle(c) {
     const was = isSaved(c.id);
-    const before = prefs();
     const result = toggleSave(c);
     if (result === 'full') { say('That is the most saved cards there can be. Remove some under Saved first.'); return; }
-    if (result === 'saved' && c.tags?.length) updatePrefs({ tagPrefs: feedback(before, c, 'more') });
     const btn = cardsEl.querySelector(`[data-id="${CSS.escape(c.id)}"] .card-save`);
     if (btn) paintSave(btn, c);
     const undo = () => {
       toggleSave(c);
-      if (result === 'saved') updatePrefs({ tagPrefs: before.tagPrefs });
       render();
     };
     if (was && pill === 'saved') leave(() => cardsEl.querySelector(`[data-id="${CSS.escape(c.id)}"]`));
@@ -468,18 +400,17 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
       return;
     }
     item(isSaved(c.id) ? 'Remove from saved' : 'Save', () => toggle(c));
-    item('More like this', () => moreLike(c));
-    item('Less like this', () => lessLike(c));
     item('Not interested in this one', () => dismissCard(c, 'Set aside.'));
     sep();
-    for (const t of tags) item(`Hide all ${t.name.toLowerCase()} topics`, () => muteTag(t));
-    item(`Hide ${cat.name}`, () => hideCategory(cat));
+    const ticked = prefs().tags;
+    for (const t of tags) if (ticked.has(t.id)) item(`Hide ${t.name}`, () => hideTag(t));
+    if (!c.pack) item(`Hide all of ${cat.name}`, () => hideCategory(cat));
     sep();
     const a = document.createElement('a');
     a.href = tuneHref;
     a.setAttribute('role', 'menuitem');
     a.className = 'menu-link';
-    a.textContent = 'Tune Explore…';
+    a.textContent = 'Choose topics…';
     menu.appendChild(a);
     placeMenu(button);
   }
@@ -512,19 +443,6 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length]?.focus(); }
   });
 
-  function moreLike(c) {
-    const before = prefs();
-    if (c.tags?.length) updatePrefs({ tagPrefs: feedback(before, c, 'more') });
-    else updatePrefs({ catPrefs: { ...before.catPrefs, [c.category]: 'more' } });
-    say(`Noted. More like “${c.topic}” from now on.`, () => updatePrefs({ tagPrefs: before.tagPrefs, catPrefs: before.catPrefs }));
-  }
-
-  function lessLike(c) {
-    const before = prefs();
-    if (c.tags?.length) updatePrefs({ tagPrefs: feedback(before, c, 'less') });
-    dismissCard(c, 'Noted. Fewer like this.', () => updatePrefs({ tagPrefs: before.tagPrefs }));
-  }
-
   function dismissCard(c, message, alsoUndo) {
     const d = readDismissed();
     d.add(c.id);
@@ -539,18 +457,24 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     });
   }
 
-  function muteTag(t) {
+  // Hiding from a card is the same as unticking in Topics, with an undo.
+  function hideTag(t) {
     const before = prefs();
-    updatePrefs({ mutedTags: [...new Set([...before.mutedTags, t.id])] });
-    leave(() => [...cardsEl.querySelectorAll('.card')].filter(el => feed.cards.find(x => x.id === el.dataset.id)?.tags?.includes(t.id)));
-    say(`Hiding ${t.name.toLowerCase()} topics.`, () => { updatePrefs({ mutedTags: before.mutedTags }); render(); });
+    updatePrefs({ topics: topicsValue(setTag(before, t.id, false)) });
+    leave(() => [...cardsEl.querySelectorAll('.card')].filter(el => !shownStill(el.dataset.id)));
+    say(`Hiding ${t.name}. Change it any time in Topics.`, () => { updatePrefs({ topics: topicsValue(before) }); render(); });
   }
 
   function hideCategory(cat) {
     const before = prefs();
-    updatePrefs({ catPrefs: { ...before.catPrefs, [cat.id]: 'hide' } });
-    leave(() => [...cardsEl.querySelectorAll('.card')].filter(el => feed.cards.find(x => x.id === el.dataset.id)?.category === cat.id));
-    say(`Hiding ${cat.name}.`, () => { updatePrefs({ catPrefs: before.catPrefs }); render(); });
+    updatePrefs({ topics: topicsValue(setCategory(before, cat.id, false)) });
+    leave(() => [...cardsEl.querySelectorAll('.card')].filter(el => !shownStill(el.dataset.id)));
+    say(`Hiding ${cat.name}. Change it any time in Topics.`, () => { updatePrefs({ topics: topicsValue(before) }); render(); });
+  }
+
+  function shownStill(id) {
+    const c = [...(feed?.cards || []), ...(feed?.pinned || []), ...packs().flatMap(p => p.cards)].find(x => x.id === id);
+    return !c || c.pack || visible(c, prefs());
   }
 
   // Fade out what is going, then close the gaps.
@@ -642,7 +566,7 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
 
   return {
     setFeed(next) {
-      const ids = f => [...f.cards, ...(f.sponsored || []), ...(f.pinned || [])].map(c => `${c.id}:${c.topic}:${c.hook}:${c.figure}`).join('|');
+      const ids = f => [...f.cards, ...(f.sponsored || []), ...(f.pinned || []), ...(f.collections || []).flatMap(x => x.cards)].map(c => `${c.id}:${c.topic}:${c.hook}:${c.figure}`).join('|');
       const changed = !feed || next.day !== feed.day || ids(next) !== ids(feed);
       feed = next;
       if (changed) refresh();

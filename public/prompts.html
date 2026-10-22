@@ -7,14 +7,14 @@
 <meta name="description" content="Write the prompts your home page finishes for you, with blanks to fill in and details that fill themselves in.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/app.css?v=3db8e47be6">
-<link rel="modulepreload" href="/prompts.js?v=3db8e47be6">
-<link rel="modulepreload" href="/store.js?v=3db8e47be6">
-<link rel="modulepreload" href="/merge.js?v=3db8e47be6">
-<link rel="modulepreload" href="/engines.js?v=3db8e47be6">
-<link rel="modulepreload" href="/template.js?v=3db8e47be6">
-<link rel="modulepreload" href="/sentence.js?v=3db8e47be6">
-<link rel="modulepreload" href="/categories.js?v=3db8e47be6">
+<link rel="stylesheet" href="/app.css?v=5e11922ad2">
+<link rel="modulepreload" href="/prompts.js?v=5e11922ad2">
+<link rel="modulepreload" href="/store.js?v=5e11922ad2">
+<link rel="modulepreload" href="/merge.js?v=5e11922ad2">
+<link rel="modulepreload" href="/engines.js?v=5e11922ad2">
+<link rel="modulepreload" href="/template.js?v=5e11922ad2">
+<link rel="modulepreload" href="/sentence.js?v=5e11922ad2">
+<link rel="modulepreload" href="/categories.js?v=5e11922ad2">
 <script>try{var t=localStorage.getItem('tmea:theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body class="page-prompts">
@@ -110,75 +110,38 @@
     </footer>
   </section>
 
-  <!-- Settings and account -->
+  <!-- Settings and account: a list of groups; each › opens its own page. -->
   <section class="pp-main" id="settings-panel" hidden aria-labelledby="settings-heading">
-    <header class="ed-head"><h2 id="settings-heading">Settings</h2></header>
+    <div id="settings-root">
+      <header class="ed-head"><h2 id="settings-heading">Settings</h2></header>
 
-    <section class="set-group">
-      <h3 class="ed-label">Opening</h3>
-      <div class="setting">
-        <label for="s-engine">New prompts open in</label>
-        <select id="s-engine"></select>
-      </div>
-      <div class="setting">
-        <label for="s-newtab">Open results in a new tab</label>
-        <input type="checkbox" id="s-newtab" class="switch">
-      </div>
-      <div class="setting">
-        <label for="s-theme">Appearance</label>
-        <select id="s-theme">
-          <option value="system">Match system</option>
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
-        </select>
-      </div>
-    </section>
+      <div class="ios-label">Opening</div>
+      <ul class="ios-group">
+        <li><a class="ios-row" href="#settings/engine"><span class="ios-name">New prompts open in</span><span class="ios-value" id="v-engine"></span><span class="ios-chev" aria-hidden="true">›</span></a></li>
+        <li><label class="ios-row"><span class="ios-name">Open results in a new tab</span><input type="checkbox" id="s-newtab" class="switch"></label></li>
+        <li><a class="ios-row" href="#settings/appearance"><span class="ios-name">Appearance</span><span class="ios-value" id="v-theme"></span><span class="ios-chev" aria-hidden="true">›</span></a></li>
+      </ul>
 
-    <section class="set-group">
-      <h3 class="ed-label">Explore</h3>
-      <div class="setting">
-        <label for="s-explore">Show topics to explore under the box</label>
-        <input type="checkbox" id="s-explore" class="switch">
-      </div>
-      <div class="setting-block">
-        <span class="setting-label">Categories</span>
-        <div id="s-cats" class="cat-prefs"></div>
-      </div>
-      <div class="setting-block">
-        <span class="setting-label" id="s-tags-label">Topics</span>
-        <p class="setting-note">Click once for more of a topic, twice to hide it, again to reset. Topics marked “less” were learned from your feedback.</p>
-        <div id="s-tags" class="tag-prefs" role="group" aria-labelledby="s-tags-label"></div>
-      </div>
-      <div class="setting-block">
-        <label class="setting-label" for="s-keywords">Your own interests</label>
-        <input type="text" id="s-keywords" class="ed-input wide" maxlength="300" placeholder="Roman history, Formula 1, sourdough, black holes" autocomplete="off">
-        <p class="setting-note">Up to eight, separated by commas. For each one, Claude writes a path of cards on our server, from a way in to the rabbit holes, and it gets its own pill on the home page. Only the interest's words are sent, never who you are, and the cards are shared with anyone else curious about the same thing.</p>
-        <div id="s-packs" class="pack-status" aria-live="polite"></div>
-      </div>
-      <div class="setting-block">
-        <span class="setting-label">Mix</span>
-        <div class="mix">
-          <span>Timely</span><input type="range" id="s-timely" min="0" max="100" step="5" aria-label="Timely or timeless"><span>Timeless</span>
-          <span>Familiar</span><input type="range" id="s-surprising" min="0" max="100" step="5" aria-label="Familiar or surprising"><span>Surprising</span>
-        </div>
-      </div>
-      <div class="setting">
-        <label for="s-recent">Remember my recent topics</label>
-        <input type="checkbox" id="s-recent" class="switch">
-      </div>
-      <p class="setting-note">Kept in this browser only. Never synced and never sent anywhere. Turning it off forgets them.</p>
-      <div class="set-actions">
-        <button type="button" class="pill" id="s-picker">Show the topic picker again</button>
-        <button type="button" class="pill" id="s-reset">Reset what Explore has learned</button>
-        <span class="setting-note" id="s-reset-note" aria-live="polite"></span>
-      </div>
-      <p class="setting-note">All of this stays with your settings. Explore's list is the same for everyone; this browser picks from it for you, and nothing here is sent to Claude or to sponsors.</p>
-    </section>
+      <div class="ios-label">Explore</div>
+      <ul class="ios-group">
+        <li><label class="ios-row"><span class="ios-name">Show Explore under the box</span><input type="checkbox" id="s-explore" class="switch"></label></li>
+        <li><a class="ios-row" href="#settings/topics"><span class="ios-name">Topics</span><span class="ios-value" id="v-topics"></span><span class="ios-chev" aria-hidden="true">›</span></a></li>
+        <li><label class="ios-row"><span class="ios-name">Remember my recent topics</span><input type="checkbox" id="s-recent" class="switch"></label></li>
+      </ul>
+      <p class="ios-foot">Recent topics stay in this browser only, never synced or sent anywhere. Turning it off forgets them.</p>
 
-    <section class="set-group">
-      <h3 class="ed-label">Account</h3>
-      <div id="account-panel"></div>
-    </section>
+      <div class="ios-label">Account</div>
+      <ul class="ios-group">
+        <li><a class="ios-row" href="#settings/account"><span class="ios-name" id="v-account-name">Sign in</span><span class="ios-value" id="v-account"></span><span class="ios-chev" aria-hidden="true">›</span></a></li>
+      </ul>
+      <p class="ios-foot" id="v-account-foot">Keep your prompts, settings and saved cards on every device.</p>
+    </div>
+
+    <div id="settings-detail" hidden>
+      <a class="ios-back" href="#settings">‹ Settings</a>
+      <header class="ed-head"><h2 id="detail-heading"></h2></header>
+      <div id="detail-body"></div>
+    </div>
   </section>
 </main>
 
@@ -187,6 +150,6 @@
   <span class="foot-links"><a href="/about">About</a><a href="/">Home</a></span>
 </footer>
 
-<script type="module" src="/prompts.js?v=3db8e47be6"></script>
+<script type="module" src="/prompts.js?v=5e11922ad2"></script>
 </body>
 </html>

@@ -178,13 +178,10 @@ test('covers are the same for the same topic and differ between topics', () => {
 });
 
 import { interestKey, interestMessage, cleanPack, INTEREST_SCHEMA, INTEREST_SYSTEM } from '../src/explore.js';
-import { interestKeyOf } from '../public/interests.js';
 
-test('an interest becomes a library key; the browser and the Worker agree', () => {
-  for (const t of ['  Indian   History ', 'Formula 1', 'Café culture', 'x', '', 'a'.repeat(61), 'ROMAN roads!', '历史']) {
-    assert.equal(interestKeyOf(t), interestKey(t), JSON.stringify(t));
-  }
+test('a collection term becomes a library key', () => {
   assert.equal(interestKey('  Indian   History '), 'indian-history');
+  assert.equal(interestKey('Café culture'), 'cafe-culture');
   assert.equal(interestKey('x'), null);
 });
 

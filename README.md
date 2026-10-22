@@ -12,9 +12,10 @@ whichever prompt is selected, in that prompt's engine. Each morning a cron in
 the Worker reads Wikipedia, Hacker News, Reddit's Today I Learned and feeds
 for each category, and asks Claude for about ten cards per category, skipping
 anything used in the last two weeks. Everyone gets the same list; each
-browser picks and orders from it using the visitor's preferences
-(`public/interests.js`), so personalisation never reaches the server's list
-or Claude. Sponsored cards follow the same rule.
+browser picks from it using the topics and sub-topics the visitor switched on
+(`public/interests.js`), so personal choices never reach the server's list or
+Claude. Collections (learning paths written from the card manager) and
+sponsored cards come with the list and follow the same rule.
 
 The page is static and loads from the edge cache with no framework and no web
 fonts. Everything lives in the browser's localStorage. Signing in (a link by
@@ -35,8 +36,8 @@ plain redirect from the browser to the engine.
 | `public/merge.js` | The one merge (per prompt, newest wins, tombstones). Runs in the page and the Worker. |
 | `public/explore.js` | Explore cards: links aimed through the selected prompt, hover previews, and the generated covers. |
 | `public/categories.js` | Explore's categories, tags, card kinds and colours. Shared by the page and the Worker. |
-| `public/interests.js` | Preferences and ranking, in the browser only: hidden and favoured categories, tags, keywords, the mix, sponsored placement. |
-| `src/explore.js` | The daily job: sources, one Claude call per category, the schema, cleaning, near-duplicates, carrying earlier cards, the evergreen list, interest packs, sponsored and pinned rows, and the card manager's checks. |
+| `public/interests.js` | Choosing and ordering cards in the browser only: topics and sub-topics, collections, sponsored placement. |
+| `src/explore.js` | The daily job: sources, one Claude call per category, the schema, cleaning, near-duplicates, carrying earlier cards, the evergreen list, collections, sponsored and pinned rows, and the card manager's checks. |
 | `public/admin/cards.html`, `public/admin-cards.js` | The card manager at `/admin/cards`. |
 | `public/_headers` | Cache headers: HTML briefly, versioned assets for a year. |
 | `extension/` | Browser extension that opens the page in every new tab. See [New tabs](#new-tabs). |
@@ -96,8 +97,11 @@ skipped for the day.
 `/admin/cards` (the same admin key as `/admin`) lists every card by where it
 lives: each day's list, pinned cards (your own, shown to everyone at the top
 of For you and of their category between optional dates), sponsored cards,
-and interest packs. Add, edit or delete cards, with a live preview; delete a
-whole pack to have it written afresh. Every save goes through the same checks
+and collections. Add, edit or delete cards, with a live preview. To make a
+collection, type a subject and press Generate: Claude writes a learning path
+(about 12 cards) for it; write one again for fresh topics. Visitors switch
+collections on in Settings, Topics, and each lends two cards a day to the
+daily list. Every save goes through the same checks
 as a generated card (`adminCard` in `src/explore.js`), and an edited card keeps
 its id so saved and seen cards still match. Changes reach visitors within 15
 minutes.

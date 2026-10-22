@@ -1,11 +1,11 @@
 // The card manager (/admin/cards): every card Explore can show, by where it
-// lives. Daily lists and interest packs were written by Claude and can be
+// lives. Daily lists and collections were written by Claude and can be
 // corrected or trimmed; pinned and sponsored cards are written here. Saves go
-// through the Worker's checks (adminCard in src/explore.js?v=3db8e47be6), the same as a
+// through the Worker's checks (adminCard in src/explore.js?v=5e11922ad2), the same as a
 // generated card. Uses the admin key from /admin.
 
-import { CATEGORIES, categoryById, KINDS, DEPTHS, STEPS, ORIGINS } from './categories.js?v=3db8e47be6';
-import { motif } from './explore.js?v=3db8e47be6';
+import { CATEGORIES, categoryById, KINDS, DEPTHS, STEPS, ORIGINS } from './categories.js?v=5e11922ad2';
+import { motif } from './explore.js?v=5e11922ad2';
 
 const KEY = 'tmea:admin-key';
 const LIMITS = { topic: 70, hook: 110, angle: 140, figure: 10, figureLabel: 40 };
@@ -15,8 +15,8 @@ const COLLECTIONS = {
   daily: { title: 'Daily lists', note: 'The list everyone got on a day, as Claude wrote it. Fix a card, take one out, or add one; the page picks up changes within 15 minutes. Carried cards are copies of earlier days’ cards.' },
   pinned: { title: 'Pinned', note: 'Your own cards, shown to everyone at the top of For you and of their category, between the dates you set. Pause one by switching it off.' },
   sponsored: { title: 'Sponsored', note: 'Labelled “Sponsored”, sent to everyone with the list; each browser shows at most one in about eight cards, and only where the visitor’s own choices allow. Views and clicks are on /admin.' },
-  pack: { title: 'Interest pack', note: '' },
-  packs: { title: 'Interest packs', note: 'Cards Claude wrote for interests people typed, shared by everyone who types the same thing. Open a pack to edit its cards, or delete the pack so it is written afresh next time someone asks.' },
+  pack: { title: 'Collection', note: '' },
+  packs: { title: 'Collections', note: 'Learning paths Claude writes for a subject you give it: ways in, deeper ideas, rabbit holes. Visitors can switch each one on in Topics, where it gets its own pill, and every collection lends two cards a day to everyone’s list. Open one to edit its cards, write it again for fresh topics, or delete it.' },
 };
 
 let collection = 'daily';
@@ -98,7 +98,7 @@ async function load() {
       const data = await api('GET', { collection, key: packKey });
       cards = data.cards;
       packs = packs.length ? packs : (await api('GET', { collection: 'packs' })).packs;
-      COLLECTIONS.pack = { title: data.name, note: `An interest pack: a path from ways in to rabbit holes.${data.suitable ? '' : ' This interest was declined, so it has no cards.'} Typed as: ${[packKey, ...(packs.find(p => p.key === packKey)?.aliases || [])].map(k => k.replace(/-/g, ' ')).join(', ')}.` };
+      COLLECTIONS.pack = { title: data.name, note: `A collection: a path from ways in to rabbit holes.${data.suitable ? '' : ' Claude declined this subject, so it has no cards.'} Also found as: ${[packKey, ...(packs.find(p => p.key === packKey)?.aliases || [])].map(k => k.replace(/-/g, ' ')).join(', ')}.` };
     } else {
       cards = (await api('GET', { collection })).cards;
     }
@@ -122,22 +122,23 @@ function renderList() {
   list.innerHTML = '';
   const q = $('#search').value.trim().toLowerCase();
 
+  $('#gen-form').hidden = collection !== 'packs';
   if (collection === 'packs') {
     $('#search').hidden = false;
     const shown = packs.filter(p => !q || p.name.toLowerCase().includes(q) || p.key.includes(q));
-    $('#count').textContent = `${packs.length} packs`;
-    if (!shown.length) list.innerHTML = '<li class="cm-empty">No interest packs yet. They are written the first time someone types an interest.</li>';
+    $('#count').textContent = `${packs.length} collection${packs.length === 1 ? '' : 's'}`;
+    if (!shown.length) list.innerHTML = '<li class="cm-empty">No collections yet. Type a subject above and press Generate.</li>';
     for (const p of shown) {
       const li = document.createElement('li');
       li.className = 'cm-row' + (p.suitable ? '' : ' off');
       li.style.setProperty('--h', 295);
       li.innerHTML = `<div class="cm-swatch"></div><div class="cm-text"><span class="t"></span><span class="h"></span><span class="m"></span></div><div class="acts"></div>`;
       li.querySelector('.t').textContent = p.name;
-      li.querySelector('.h').textContent = p.suitable ? `${p.cards} cards · asked for ${p.hits} times` : `Declined · asked for ${p.hits} times`;
-      li.querySelector('.m').textContent = `Written ${new Date(p.createdAt).toLocaleDateString()}${p.aliases.length ? ` · also typed as ${p.aliases.map(a => a.replace(/-/g, ' ')).join(', ')}` : ''}`;
+      li.querySelector('.h').textContent = p.suitable ? `${p.cards} cards` : 'Declined by Claude';
+      li.querySelector('.m').textContent = `Written ${new Date(p.createdAt).toLocaleDateString()}${p.aliases.length ? ` · also found as ${p.aliases.map(a => a.replace(/-/g, ' ')).join(', ')}` : ''}`;
       const acts = li.querySelector('.acts');
-      if (p.suitable) acts.append(button('Open', 'pill', () => { location.hash = `pack:${p.key}`; }));
-      acts.append(button('Delete pack', 'quiet danger', () => deletePack(p)));
+      if (p.suitable) acts.append(button('Open', 'pill', () => { location.hash = `pack:${p.key}`; }), button('Write again', 'quiet', () => writeAgain(p)));
+      acts.append(button('Delete', 'quiet danger', () => deletePack(p)));
       list.appendChild(li);
     }
     return;
@@ -147,8 +148,9 @@ function renderList() {
   const add = collection !== 'daily' || day;
   if (add) actions.append(button('Add a card', 'pill solid', () => openEditor(null)));
   if (collection === 'pack') {
-    actions.append(button('All packs', 'quiet', () => { location.hash = 'packs'; }));
-    actions.append(button('Delete pack', 'quiet danger', () => deletePack(packs.find(p => p.key === packKey) || { key: packKey, name: COLLECTIONS.pack.title })));
+    actions.append(button('All collections', 'quiet', () => { location.hash = 'packs'; }));
+    actions.append(button('Write again', 'quiet', () => writeAgain(packs.find(p => p.key === packKey) || { key: packKey, name: COLLECTIONS.pack.title })));
+    actions.append(button('Delete', 'quiet danger', () => deletePack(packs.find(p => p.key === packKey) || { key: packKey, name: COLLECTIONS.pack.title })));
   }
   const shown = cards.filter(c => !q || `${c.topic} ${c.hook} ${c.angle} ${c.sponsor || ''}`.toLowerCase().includes(q));
   $('#count').textContent = `${cards.length} card${cards.length === 1 ? '' : 's'}${collection === 'daily' && day ? ` on ${day}` : ''}`;
@@ -199,8 +201,41 @@ async function deleteCard(c) {
   } catch (err) { if (err.message !== 'locked') $('#list-error').textContent = err.message; }
 }
 
+// ---------- collections ----------
+
+$('#gen-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const term = $('#gen-term').value.trim();
+  if (!term) return;
+  const btn = $('#gen-go');
+  btn.disabled = true;
+  $('#gen-status').textContent = `Claude is writing a learning path for “${term}”. This takes a few seconds…`;
+  try {
+    const r = await api('PUT', null, { collection: 'pack', generate: term });
+    $('#gen-status').textContent = `Written: ${r.name}, ${r.cards} cards.`;
+    $('#gen-term').value = '';
+    await load();
+  } catch (err) {
+    if (err.message !== 'locked') $('#gen-status').textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+async function writeAgain(p) {
+  if (!confirm(`Write “${p.name}” again? Its cards are replaced with new ones on fresh topics; edits made here are lost.`)) return;
+  $('#gen-status').textContent = `Claude is writing “${p.name}” again…`;
+  try {
+    const r = await api('PUT', null, { collection: 'pack', generate: p.key.replace(/-/g, ' '), again: true });
+    $('#gen-status').textContent = `Written again: ${r.name}, ${r.cards} cards.`;
+    await load();
+  } catch (err) {
+    if (err.message !== 'locked') $('#gen-status').textContent = err.message;
+  }
+}
+
 async function deletePack(p) {
-  if (!confirm(`Delete the pack for “${p.name}”${p.aliases?.length ? ` and the ways it was also typed` : ''}? The next person who asks for it gets a newly written one.`)) return;
+  if (!confirm(`Delete the collection “${p.name}”? Visitors who had it switched on stop seeing it.`)) return;
   try {
     await api('DELETE', null, { collection: 'pack', key: p.key, whole: true });
     location.hash = 'packs';

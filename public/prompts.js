@@ -3,14 +3,12 @@
 //
 // Everything saves as you type. A new prompt is kept once it has words.
 
-import * as store from './store.js?v=3db8e47be6';
-import { ENGINES, engineById } from './engines.js?v=3db8e47be6';
-import { describe, AUTO_FILLS, autoValues, fill, defaultLabel, highlight, parse } from './template.js?v=3db8e47be6';
-import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=3db8e47be6';
-import { CATEGORIES, categoryById, KINDS } from './categories.js?v=3db8e47be6';
-import { prefsFrom, tagState, cycleTag } from './interests.js?v=3db8e47be6';
-import { forgetLocal } from './explore.js?v=3db8e47be6';
-import { packsFor, ensurePacks, retryPack } from './packs.js?v=3db8e47be6';
+import * as store from './store.js?v=5e11922ad2';
+import { ENGINES, engineById } from './engines.js?v=5e11922ad2';
+import { describe, AUTO_FILLS, autoValues, fill, defaultLabel, highlight, parse } from './template.js?v=5e11922ad2';
+import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=5e11922ad2';
+import { CATEGORIES, categoryById, KINDS } from './categories.js?v=5e11922ad2';
+import { prefsFrom, topicsValue, setCategory, setTag, DEFAULT_TOPICS } from './interests.js?v=5e11922ad2';
 
 const EXAMPLES = [
   { label: 'Compare', template: 'Compare {thing} with {other thing}: how they differ, where each one wins, and which to choose when' },
@@ -55,7 +53,7 @@ let statusTimer = null;
 
 function route() {
   const h = decodeURIComponent(location.hash.slice(1));
-  if (h === 'settings') return showSettings();
+  if (h === 'settings' || h.startsWith('settings/')) return showSettings(h.slice(9));
   if (h === 'saved') return showSaved();
   const list = store.prompts();
   if (h === 'new') {
@@ -535,213 +533,200 @@ $('#saved-clear').addEventListener('click', () => {
 
 // ---------- settings ----------
 
-function showSettings() {
+// One list of grouped rows; a row with › opens its own page at
+// #settings/<name>, with a way back. Switches change at once.
+
+const THEMES = [['system', 'Match system'], ['light', 'Light'], ['dark', 'Dark']];
+const DETAILS = { engine: 'New prompts open in', appearance: 'Appearance', topics: 'Topics', account: 'Account' };
+let detail = '';
+
+function showSettings(name = '') {
   commit();
   editorEl.hidden = true;
   savedEl.hidden = true;
   settingsEl.hidden = false;
+  detail = DETAILS[name] ? name : '';
+  if (name && !detail) history.replaceState(null, '', '#settings');
   renderSettings();
   renderList();
+  window.scrollTo(0, 0);
 }
 
 function renderSettings() {
-  const sel = $('#s-engine');
-  sel.innerHTML = '';
-  for (const e of ENGINES) {
-    const o = document.createElement('option');
-    o.value = e.id;
-    o.textContent = e.name;
-    o.selected = e.id === store.setting('defaultEngine', 'google-ai');
-    sel.appendChild(o);
-  }
+  $('#settings-root').hidden = !!detail;
+  $('#settings-detail').hidden = !detail;
+  if (detail) return renderDetail();
+  $('#v-engine').textContent = engineById(store.setting('defaultEngine', 'google-ai')).name;
   $('#s-newtab').checked = !!store.setting('newTab', false);
-  $('#s-theme').value = store.setting('theme', 'system');
+  $('#v-theme').textContent = THEMES.find(t => t[0] === store.setting('theme', 'system'))[1];
   $('#s-explore').checked = store.setting('explore', true) !== false;
+  const p = prefsFrom(store.setting);
+  const on = p.collections.length;
+  $('#v-topics').textContent = `${p.categories.size} of ${CATEGORIES.length}${on ? ` · ${on} collection${on === 1 ? '' : 's'}` : ''}`;
   $('#s-recent').checked = store.recentOn();
-  renderExploreSettings();
-  renderAccount();
+  const user = store.currentUser();
+  $('#v-account-name').textContent = user ? user.email : 'Sign in';
+  $('#v-account').textContent = user ? 'Synced' : '';
+  $('#v-account-foot').textContent = user
+    ? 'Prompts, settings and saved cards sync to every browser you sign in on.'
+    : 'Keep your prompts, settings and saved cards on every device.';
 }
 
-function prefs() {
-  return prefsFrom(store.setting);
-}
-
-// Categories: More, Normal or Hide each.
-function renderCats() {
-  const el = $('#s-cats');
-  const p = prefs();
-  el.innerHTML = '';
-  for (const c of CATEGORIES) {
-    const row = document.createElement('div');
-    row.className = 'cat-row';
-    row.style.setProperty('--h', c.hue);
-    const name = document.createElement('span');
-    name.className = 'cat-name';
-    name.textContent = c.name;
-    const seg = document.createElement('div');
-    seg.className = 'seg';
-    seg.setAttribute('role', 'radiogroup');
-    seg.setAttribute('aria-label', c.name);
-    const cur = p.catPrefs[c.id] || 'normal';
-    for (const [v, label] of [['more', 'More'], ['normal', 'Normal'], ['hide', 'Hide']]) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.setAttribute('role', 'radio');
-      b.setAttribute('aria-checked', String(cur === v));
-      b.dataset.v = v;
-      b.textContent = label;
-      b.addEventListener('click', () => {
-        const catPrefs = { ...prefs().catPrefs };
-        if (v === 'normal') delete catPrefs[c.id]; else catPrefs[c.id] = v;
-        store.updateSettings({ catPrefs, interests: [] });
-        renderCats();
-      });
-      seg.appendChild(b);
-    }
-    row.append(name, seg);
-    el.appendChild(row);
-  }
-}
-
-// Topics: chips that cycle neutral, more, hidden.
-function renderTags() {
-  const el = $('#s-tags');
-  const p = prefs();
-  el.innerHTML = '';
-  for (const c of CATEGORIES) {
-    const g = document.createElement('div');
-    g.className = 'tag-group';
-    const label = document.createElement('span');
-    label.className = 'tag-cat';
-    label.textContent = c.name;
-    label.style.setProperty('--h', c.hue);
-    g.appendChild(label);
-    for (const t of c.tags) {
-      const state = tagState(p, t.id);
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = `chip tag-chip ${state}`;
-      b.style.setProperty('--h', c.hue);
-      b.dataset.state = state;
-      b.textContent = t.name;
-      b.title = { neutral: 'Click for more of this', like: 'More of this. Click to hide it', hide: 'Hidden. Click to reset', less: 'Less of this, learned from your feedback. Click to reset' }[state];
-      b.setAttribute('aria-label', `${t.name}: ${{ neutral: 'normal', like: 'more', hide: 'hidden', less: 'less' }[state]}`);
-      b.addEventListener('click', () => {
-        store.updateSettings(cycleTag(prefs(), t.id));
-        renderTags();
-        el.querySelector(`[aria-label^="${CSS.escape(t.name)}:"]`)?.focus();
-      });
-      g.appendChild(b);
-    }
-    el.appendChild(g);
-  }
-}
-
-function renderExploreSettings() {
-  const p = prefs();
-  renderCats();
-  renderTags();
-  const kw = $('#s-keywords');
-  if (document.activeElement !== kw) kw.value = p.keywords;
-  $('#s-timely').value = String(Math.round((1 - p.mix.timely) * 100));
-  $('#s-surprising').value = String(Math.round(p.mix.surprising * 100));
-  loadPacks();
-}
-
-let keywordsTimer = null;
-$('#s-keywords').addEventListener('input', e => {
-  clearTimeout(keywordsTimer);
-  keywordsTimer = setTimeout(() => store.updateSettings({ keywords: e.target.value }), 400);
-});
-// Asking for packs waits until the box is left, not every keystroke.
-$('#s-keywords').addEventListener('change', e => {
-  clearTimeout(keywordsTimer);
-  store.updateSettings({ keywords: e.target.value });
-  loadPacks();
-});
-
-function loadPacks() {
-  ensurePacks(store.setting('keywords', ''), renderPackStatus);
-  renderPackStatus();
-}
-
-function renderPackStatus() {
-  const el = $('#s-packs');
-  el.innerHTML = '';
-  for (const p of packsFor(store.setting('keywords', ''))) {
-    const row = document.createElement('span');
-    row.className = `pack-chip ${p.status}`;
-    const label = { loading: 'writing cards…', ready: `${p.cards.length} cards`, unsuitable: 'not something Explore can write about', error: p.error || 'could not get cards' }[p.status];
-    row.textContent = `${p.name} · ${label}`;
-    if (p.status === 'error') {
-      const again = document.createElement('button');
-      again.type = 'button';
-      again.className = 'quiet';
-      again.textContent = 'Try again';
-      again.addEventListener('click', () => retryPack(p.key));
-      row.appendChild(again);
-    }
-    el.appendChild(row);
-  }
-}
-// The slider reads left to right as Timely to Timeless; the setting is how
-// much to favour timely cards.
-function saveMix() {
-  store.updateSettings({ mix: { timely: 1 - Number($('#s-timely').value) / 100, surprising: Number($('#s-surprising').value) / 100 } });
-}
-$('#s-timely').addEventListener('change', saveMix);
-$('#s-surprising').addEventListener('change', saveMix);
-$('#s-picker').addEventListener('click', () => {
-  store.updateSettings({ onboarded: false });
-  $('#s-reset-note').textContent = 'The picker will be on the home page.';
-});
-$('#s-reset').addEventListener('click', () => {
-  if (!confirm('Forget what Explore has learned? Topic choices, hidden topics, cards you set aside and the mix go back to the start. Categories and your own interests stay.')) return;
-  store.updateSettings({ tagPrefs: {}, mutedTags: [], mix: {} });
-  forgetLocal();
-  renderExploreSettings();
-  $('#s-reset-note').textContent = 'Done. Explore starts fresh.';
-});
-
-$('#s-engine').addEventListener('change', e => store.updateSettings({ defaultEngine: e.target.value }));
 $('#s-newtab').addEventListener('change', e => store.updateSettings({ newTab: e.target.checked }));
-$('#s-theme').addEventListener('change', e => { store.updateSettings({ theme: e.target.value }); store.applyTheme(e.target.value); });
 $('#s-explore').addEventListener('change', e => store.updateSettings({ explore: e.target.checked }));
 $('#s-recent').addEventListener('change', e => store.setRecentOn(e.target.checked));
 
-function renderAccount() {
-  const el = $('#account-panel');
+function renderDetail() {
+  $('#detail-heading').textContent = DETAILS[detail];
+  const body = $('#detail-body');
+  body.innerHTML = '';
+  if (detail === 'engine') {
+    body.append(choiceGroup(ENGINES.map(e => [e.id, e.name, e.host]), store.setting('defaultEngine', 'google-ai'), id => store.updateSettings({ defaultEngine: id })));
+    body.append(foot('Each prompt can open somewhere of its own; this is where new ones start.'));
+  } else if (detail === 'appearance') {
+    body.append(choiceGroup(THEMES, store.setting('theme', 'system'), id => { store.updateSettings({ theme: id }); store.applyTheme(id); }));
+  } else if (detail === 'topics') {
+    renderTopics(body);
+  } else if (detail === 'account') {
+    renderAccount(body);
+  }
+}
+
+// A group of rows with a tick on the one chosen.
+function choiceGroup(options, current, onPick) {
+  const ul = group();
+  for (const [id, name, sub] of options) {
+    const b = rowButton(name, sub);
+    b.setAttribute('role', 'menuitemradio');
+    b.setAttribute('aria-checked', String(id === current));
+    b.addEventListener('click', () => { onPick(id); renderDetail(); });
+    ul.appendChild(li(b));
+  }
+  return ul;
+}
+
+function group() { const ul = document.createElement('ul'); ul.className = 'ios-group'; return ul; }
+function li(child) { const l = document.createElement('li'); l.appendChild(child); return l; }
+function label(text) { const d = document.createElement('div'); d.className = 'ios-label'; d.textContent = text; return d; }
+function foot(text) { const p = document.createElement('p'); p.className = 'ios-foot'; p.textContent = text; return p; }
+function rowButton(name, sub) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'ios-row';
+  b.innerHTML = '<span class="ios-name"></span><span class="ios-value"></span><span class="ios-tick" aria-hidden="true">✓</span>';
+  b.querySelector('.ios-name').textContent = name;
+  b.querySelector('.ios-value').textContent = sub || '';
+  return b;
+}
+function switchRow(name, checked, onChange, cls = '') {
+  const l = document.createElement('label');
+  l.className = `ios-row ${cls}`;
+  l.innerHTML = '<span class="ios-name"></span><input type="checkbox" class="switch">';
+  l.querySelector('.ios-name').textContent = name;
+  const input = l.querySelector('input');
+  input.checked = checked;
+  input.addEventListener('change', () => onChange(input.checked));
+  return l;
+}
+
+// Topics: a switch for each, its sub-topics ticked underneath while it is on.
+// Then the collections, each with its own switch.
+function renderTopics(body) {
+  const p = prefsFrom(store.setting);
+  body.append(foot('Explore shows cards from the topics switched on. Untick a sub-topic to leave it out.'));
+  for (const c of CATEGORIES) {
+    const ul = group();
+    ul.style.setProperty('--h', c.hue);
+    const on = p.categories.has(c.id);
+    const head = switchRow(c.name, on, v => saveTopics(setCategory(prefsFrom(store.setting), c.id, v)), 'ios-topic');
+    ul.appendChild(li(head));
+    if (on) {
+      for (const t of c.tags) {
+        const b = rowButton(t.name);
+        b.classList.add('ios-sub');
+        b.setAttribute('role', 'menuitemcheckbox');
+        b.setAttribute('aria-checked', String(p.tags.has(t.id)));
+        b.addEventListener('click', () => saveTopics(setTag(prefsFrom(store.setting), t.id, !p.tags.has(t.id))));
+        ul.appendChild(li(b));
+      }
+    }
+    body.append(ul);
+  }
+  const collections = knownCollections();
+  if (collections.length) {
+    body.append(label('Collections'));
+    const ul = group();
+    for (const c of collections) {
+      ul.appendChild(li(switchRow(c.name, p.collections.includes(c.key), v => {
+        const cur = prefsFrom(store.setting).collections.filter(k => k !== c.key);
+        store.updateSettings({ collections: v ? [...cur, c.key] : cur });
+      })));
+    }
+    body.append(ul, foot('A collection is a learning path through one subject, from ways in to rabbit holes. Each one switched on gets its own pill above the cards.'));
+  }
+  const reset = group();
+  const b = rowButton('Go back to the starting topics');
+  b.classList.add('ios-action');
+  b.addEventListener('click', () => { store.updateSettings({ topics: DEFAULT_TOPICS }); renderDetail(); });
+  reset.appendChild(li(b));
+  body.append(label(' '), reset);
+}
+
+function saveTopics(p) {
+  store.updateSettings({ topics: topicsValue(p) });
+  const y = window.scrollY;
+  renderDetail();
+  window.scrollTo(0, y);
+}
+
+// Collections come with Explore's list; the home page keeps a copy.
+function knownCollections() {
+  try { return JSON.parse(localStorage.getItem('tmea:explore-feed') || 'null')?.feed?.collections || []; } catch { return []; }
+}
+fetch('/api/explore', { credentials: 'omit' }).then(r => r.json()).then(feed => {
+  try {
+    const cached = JSON.parse(localStorage.getItem('tmea:explore-feed') || 'null');
+    localStorage.setItem('tmea:explore-feed', JSON.stringify({ at: cached?.at || 0, feed }));
+  } catch { /* private mode */ }
+  if (detail === 'topics') renderDetail();
+}).catch(() => {});
+
+function renderAccount(body) {
   const user = store.currentUser();
-  el.innerHTML = '';
   if (user) {
-    el.innerHTML = `
-      <div class="account-row">
-        <div><div class="who"></div><div class="sub">Prompts and settings sync to every browser you sign in on.</div></div>
-        <div class="account-actions">
-          <button type="button" class="pill" id="signout">Sign out</button>
-          <button type="button" class="pill danger" id="delete-account">Delete account</button>
-        </div>
-      </div>`;
-    el.querySelector('.who').textContent = user.email;
-    el.querySelector('#signout').addEventListener('click', () => store.signOut());
-    el.querySelector('#delete-account').addEventListener('click', async () => {
-      if (!confirm('Delete your account and the synced copy of your prompts? The prompts in this browser stay.')) return;
+    const ul = group();
+    const who = rowButton('Signed in as', user.email);
+    who.disabled = true;
+    who.classList.add('ios-static');
+    ul.appendChild(li(who));
+    body.append(ul, foot('Prompts, settings and saved cards sync to every browser you sign in on.'));
+    const actions = group();
+    const out = rowButton('Sign out');
+    out.classList.add('ios-action');
+    out.addEventListener('click', () => store.signOut());
+    const del = rowButton('Delete account');
+    del.classList.add('ios-action', 'danger');
+    del.addEventListener('click', async () => {
+      if (!confirm('Delete your account and the synced copy of your prompts and saved cards? What is in this browser stays.')) return;
       try { await store.deleteAccount(); } catch (err) { alert(err.message); }
     });
+    actions.append(li(out), li(del));
+    body.append(label(' '), actions);
     return;
   }
-  el.innerHTML = `
-    <p class="setting-note account-intro">Your prompts are saved in this browser only. Sign in with a link sent to your email, no password, to keep them on every device.</p>
-    <form class="field" id="signin-form">
-      <input type="email" id="signin-email" placeholder="you@example.com" required autocomplete="email" inputmode="email" aria-label="Email">
-      <button type="submit" class="pill solid" id="signin-send">Email me a link</button>
-    </form>
-    <p id="signin-status" class="status" aria-live="polite"></p>`;
-  el.querySelector('#signin-form').addEventListener('submit', async e => {
+  body.append(foot('Sign in with a link sent to your email, no password. Your prompts, settings and saved cards then follow you to every browser you sign in on.'));
+  const form = document.createElement('form');
+  form.className = 'field ios-signin';
+  form.innerHTML = `
+    <input type="email" placeholder="you@example.com" required autocomplete="email" inputmode="email" aria-label="Email">
+    <button type="submit" class="pill solid">Email me a link</button>`;
+  const out = document.createElement('p');
+  out.className = 'status';
+  out.setAttribute('aria-live', 'polite');
+  form.addEventListener('submit', async e => {
     e.preventDefault();
-    const email = el.querySelector('#signin-email').value.trim();
-    const btn = el.querySelector('#signin-send');
-    const out = el.querySelector('#signin-status');
+    const email = form.querySelector('input').value.trim();
+    const btn = form.querySelector('button');
     btn.disabled = true;
     out.className = 'status';
     out.textContent = 'Sending…';
@@ -762,6 +747,7 @@ function renderAccount() {
       btn.disabled = false;
     }
   });
+  body.append(form, out);
 }
 
 // ---------- changes from elsewhere ----------
@@ -773,7 +759,7 @@ store.subscribe(what => {
     const user = store.currentUser();
     $('#sync-dot').hidden = !user;
     $('#foot-note').textContent = user ? `Synced to ${user.email}.` : 'Saved in this browser.';
-    if (!settingsEl.hidden) renderAccount();
+    if (!settingsEl.hidden) renderSettings();
   } else if (what === 'state') {
     // Another tab or browser changed the list. Leave a field alone while
     // someone is typing in it; otherwise show the newer copy.
