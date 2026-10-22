@@ -8,7 +8,7 @@
 // first box instead.
 //
 // Which cards, in what order, is decided here in the browser from the
-// visitor's preferences (interests.js?v=c0b11e0890). Feedback hides or nudges without
+// visitor's preferences (interests.js?v=3db8e47be6). Feedback hides or nudges without
 // reshuffling what is on screen: the order is fixed until the visitor picks
 // another pill, finishes the picker, or comes back later.
 //
@@ -16,8 +16,8 @@
 // for science, strata for history, …), varied by a seed from the topic so no
 // two look alike, with the card's one striking figure set large on top.
 
-import { CATEGORIES, categoryById, tagById, ORIGINS, KINDS, DEPTHS, STEPS } from './categories.js?v=c0b11e0890';
-import { rank, feedback, placeSponsored, hidden } from './interests.js?v=c0b11e0890';
+import { CATEGORIES, categoryById, tagById, ORIGINS, KINDS, DEPTHS, STEPS } from './categories.js?v=3db8e47be6';
+import { rank, feedback, placeSponsored, hidden } from './interests.js?v=3db8e47be6';
 
 // Three rows to start (the wide lead card, then three and three); each
 // "Show more" adds two rows under them.
@@ -114,6 +114,7 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     cardsEl.innerHTML = '';
     cardsEl.removeAttribute('aria-busy');
     shown.forEach((c, i) => cardsEl.appendChild(cardEl(c, i === 0)));
+    measureFeature();
     if (!shown.length) {
       const empty = document.createElement('p');
       empty.className = 'explore-empty';
@@ -149,6 +150,22 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     footEl.textContent = feed.source === 'daily'
       ? "Chosen this morning by Claude from Wikipedia, Hacker News, Reddit's Today I Learned and sources for each category, then ordered for you in this browser. Each card opens with the prompt you have selected above."
       : 'A few timeless places to start. Each card opens with the prompt you have selected above.';
+  }
+
+  // The lead card's question is pinned to the bottom of its column; tell
+  // the words above how tall it is, now and whenever the width changes.
+  let footWatch = null;
+  function measureFeature() {
+    footWatch?.disconnect();
+    const card = cardsEl.querySelector('.card.feature:not(.skeleton)');
+    const foot = card?.querySelector('.card-foot');
+    if (!foot) return;
+    const set = () => card.style.setProperty('--foot', `${Math.ceil(foot.getBoundingClientRect().height)}px`);
+    set();
+    if (typeof ResizeObserver === 'function') {
+      footWatch = new ResizeObserver(set);
+      footWatch.observe(foot);
+    }
   }
 
   function renderSkeleton() {

@@ -1,11 +1,11 @@
 // The card manager (/admin/cards): every card Explore can show, by where it
 // lives. Daily lists and interest packs were written by Claude and can be
 // corrected or trimmed; pinned and sponsored cards are written here. Saves go
-// through the Worker's checks (adminCard in src/explore.js?v=c0b11e0890), the same as a
+// through the Worker's checks (adminCard in src/explore.js?v=3db8e47be6), the same as a
 // generated card. Uses the admin key from /admin.
 
-import { CATEGORIES, categoryById, KINDS, DEPTHS, STEPS, ORIGINS } from './categories.js?v=c0b11e0890';
-import { motif } from './explore.js?v=c0b11e0890';
+import { CATEGORIES, categoryById, KINDS, DEPTHS, STEPS, ORIGINS } from './categories.js?v=3db8e47be6';
+import { motif } from './explore.js?v=3db8e47be6';
 
 const KEY = 'tmea:admin-key';
 const LIMITS = { topic: 70, hook: 110, angle: 140, figure: 10, figureLabel: 40 };

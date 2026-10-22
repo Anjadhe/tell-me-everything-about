@@ -4,7 +4,7 @@
 // account. Packs are kept in this browser for a day, then asked for again
 // (the server refreshes its own copy weekly). One request at a time.
 
-import { keywordList, interestKeyOf } from './interests.js?v=c0b11e0890';
+import { keywordList, interestKeyOf } from './interests.js?v=3db8e47be6';
 
 const CACHE_KEY = 'tmea:interest-packs';
 const FRESH_MS = 24 * 60 * 60 * 1000;

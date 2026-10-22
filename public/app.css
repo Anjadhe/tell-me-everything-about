@@ -616,7 +616,10 @@ kbd { font-family: var(--sans); font-size: 11px; color: var(--ink-2); border: 1p
 .card.feature .figure { left: 22px; bottom: 20px; }
 .card.feature .figure-n { font-size: clamp(44px, 5.2vw, 62px); }
 .card.feature .figure-l { font-size: 12.5px; }
-.card.feature .card-body { flex: 1; justify-content: center; gap: 8px; padding: 22px 22px 64px; }
+/* The question sits along the bottom of the right column; the words above
+   leave room for however many lines it takes (--foot, measured in
+   explore.js), so a long question never runs into the hook. */
+.card.feature .card-body { flex: 1; justify-content: center; gap: 8px; padding: 22px 22px calc(var(--foot, 46px) + 14px); }
 .card.feature .card-title { font-size: clamp(22px, 2.4vw, 27px); }
 .card.feature .card-hook { font-size: 14px; }
 .card.feature .card-foot { position: absolute; left: 54%; right: 0; bottom: 0; padding: 0 12px 18px 22px; }
@@ -1091,7 +1094,7 @@ mark.tk { background: none; color: inherit; border-radius: 4px; }
   .card.feature { grid-column: auto; }
   .card.feature .card-link { flex-direction: column; }
   .card.feature .cover { width: auto; aspect-ratio: 16 / 9; min-height: 0; }
-  .card.feature .card-body { padding: 14px 16px 6px; justify-content: flex-start; }
+  .card.feature .card-body { padding: 14px 16px 6px !important; justify-content: flex-start; }
   .card.feature .card-foot { position: static; padding: 6px 12px 14px 16px; }
   .card.feature .figure { left: 16px; bottom: 13px; }
   .card.feature .figure-n { font-size: 38px; }
