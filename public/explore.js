@@ -8,7 +8,7 @@
 // first box instead.
 //
 // Which cards, in what order, is decided here in the browser from the
-// visitor's preferences (interests.js?v=ff28f9ba8d). Feedback hides or nudges without
+// visitor's preferences (interests.js?v=ce4a88d427). Feedback hides or nudges without
 // reshuffling what is on screen: the order is fixed until the visitor picks
 // another pill or comes back later.
 //
@@ -16,8 +16,8 @@
 // for science, strata for history, …), varied by a seed from the topic so no
 // two look alike, with the card's one striking figure set large on top.
 
-import { CATEGORIES, categoryById, tagById, ORIGINS, KINDS, DEPTHS } from './categories.js?v=ff28f9ba8d';
-import { rank, placeSponsored, visible, setCategory, setTag, topicsValue } from './interests.js?v=ff28f9ba8d';
+import { CATEGORIES, categoryById, tagById, ORIGINS, KINDS, DEPTHS, isNews } from './categories.js?v=ce4a88d427';
+import { rank, placeSponsored, visible, setCategory, setTag, topicsValue } from './interests.js?v=ce4a88d427';
 
 // Three rows to start (the wide lead card, then three and three); each
 // "Show more" adds two rows under them.
@@ -52,13 +52,16 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
   let feed = null;
   let count = FIRST;
   let shown = [];
-  let pill = null;        // a category, 'saved', or null for "For you"
+  let pill = null;        // a category, 'news', 'saved', or null for "For you"
   let frozen = null;      // card ids in the order first shown
 
   // The day's list, chosen for this visitor.
+  // The News pill is today's news across the visitor's topics.
   function ranked(category = pill) {
     if (!feed) return [];
-    return rank(feed.cards, prefs(), { dismissed: readDismissed(), seenBefore: seenBefore(feed.day), category });
+    const opts = { dismissed: readDismissed(), seenBefore: seenBefore(feed.day) };
+    if (category === 'news') return rank(feed.cards, prefs(), opts).filter(isNews);
+    return rank(feed.cards, prefs(), { ...opts, category });
   }
 
   // The ranked list in the order already on screen: cards that are now hidden
@@ -162,7 +165,8 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     const all = ranked(null);
     const cats = CATEGORIES.filter(c => p.categories.has(c.id) && all.some(x => x.category === c.id));
     const savedCount = saved().length;
-    if (pill && pill !== 'saved' && !cats.some(c => c.id === pill)) pill = null;
+    const hasNews = all.some(isNews);
+    if (pill && pill !== 'saved' && !(pill === 'news' && hasNews) && !cats.some(c => c.id === pill)) pill = null;
     pillsEl.hidden = false;
     pillsEl.innerHTML = '';
     const make = (id, name, hue) => {
@@ -180,6 +184,7 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
       pillsEl.appendChild(b);
     };
     make(null, 'For you');
+    if (hasNews) make('news', 'News');
     if (savedCount || pill === 'saved') make('saved', `Saved · ${savedCount}`);
     for (const c of cats) make(c.id, c.name, c.hue);
     const tune = document.createElement('a');

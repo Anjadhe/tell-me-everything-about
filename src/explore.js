@@ -14,7 +14,7 @@
 // test/explore.test.js.
 
 import Anthropic from '@anthropic-ai/sdk';
-import { CATEGORIES, CATEGORY_IDS, TAG_IDS, ORIGINS, KINDS, DEPTHS, STEPS } from '../public/categories.js';
+import { CATEGORIES, CATEGORY_IDS, TAG_IDS, ORIGINS, KINDS, DEPTHS, STEPS, MOVED_TAGS, isNews } from '../public/categories.js';
 
 // The model is EXPLORE_MODEL in wrangler.jsonc; this is the fallback when it
 // is unset. Server-side refusal fallback is only accepted by some models, so
@@ -60,9 +60,25 @@ export const FEEDS = {
   nprmovies: { title: 'NPR Movies', origin: 'culture', type: 'rss', url: 'https://feeds.npr.org/1045/rss.xml' },
   nprmusic: { title: 'NPR Music', origin: 'culture', type: 'rss', url: 'https://feeds.npr.org/1039/rss.xml' },
   bbcsport: { title: 'BBC Sport', origin: 'sport', type: 'rss', url: 'https://feeds.bbci.co.uk/sport/rss.xml' },
+  bbcworld: { title: 'BBC News: world', origin: 'news', type: 'rss', url: 'https://feeds.bbci.co.uk/news/world/rss.xml' },
+  bbcscience: { title: 'BBC News: science and environment', origin: 'news', type: 'rss', url: 'https://feeds.bbci.co.uk/news/science_and_environment/rss.xml' },
+  guardianworld: { title: 'The Guardian: world', origin: 'news', type: 'rss', url: 'https://www.theguardian.com/world/rss' },
+  nprnews: { title: 'NPR News', origin: 'news', type: 'rss', url: 'https://feeds.npr.org/1001/rss.xml' },
+  bbchealth: { title: 'BBC News: health', origin: 'news', type: 'rss', url: 'https://feeds.bbci.co.uk/news/health/rss.xml' },
+  nprhealth: { title: 'NPR Health', origin: 'news', type: 'rss', url: 'https://feeds.npr.org/1128/rss.xml' },
+  healthresearch: { title: 'ScienceDaily: health and medicine', origin: 'science', type: 'rss', url: 'https://www.sciencedaily.com/rss/health_medicine.xml' },
+  bbcbusiness: { title: 'BBC News: business', origin: 'news', type: 'rss', url: 'https://feeds.bbci.co.uk/news/business/rss.xml' },
+  nprbusiness: { title: 'NPR Business', origin: 'news', type: 'rss', url: 'https://feeds.npr.org/1006/rss.xml' },
   conversation: { title: 'The Conversation', origin: 'essays', type: 'rss', url: 'https://theconversation.com/global/articles.atom' },
   aeon: { title: 'Aeon essays', origin: 'essays', type: 'rss', url: 'https://aeon.co/feed.rss' },
 };
+
+// The daily news call's feeds (with Wikipedia's In the news, shared by all).
+export const NEWS_FEEDS = ['bbcworld', 'guardianworld', 'nprnews', 'bbcbusiness', 'bbchealth', 'bbcscience'];
+export const NEWS_CARDS = 12;
+// News cards are carried this many days, then make way: yesterday's story
+// should not linger. Nor do they keep a story from coming back with news.
+export const NEWS_DAYS = 1;
 
 // Which feeds each category's call sees, besides the shared material.
 export const CATEGORY_FEEDS = {
@@ -74,6 +90,8 @@ export const CATEGORY_FEEDS = {
   society: ['conversation'],
   ideas: ['aeon', 'conversation'],
   sport: ['bbcsport'],
+  health: ['bbchealth', 'nprhealth', 'healthresearch'],
+  business: ['bbcbusiness', 'nprbusiness', 'hn'],
 };
 
 export async function gatherSources(day, fetchImpl = fetch, env = {}) {
@@ -220,6 +238,29 @@ Tags for ${c.name}: ${tags}. A card may also carry a tag from another category w
 ${feeds ? `Material for ${c.name}:\n\n${feeds}` : `There is no extra material for ${c.name} today; use the shared material and timeless topics.`}`;
 }
 
+// The news call: explainers for what is happening, filed under the topics.
+export function newsMessage(sources) {
+  const feeds = NEWS_FEEDS
+    .map(id => section(`${FEEDS[id].title} (origin: news)`, sources.feeds[id] || []))
+    .filter(Boolean)
+    .join('\n\n');
+  const topics = CATEGORIES.map(c => `${c.id} (${c.name}: ${c.tags.map(t => t.id).join(', ')})`).join('; ');
+  return `Write up to ${NEWS_CARDS} cards about what is in the news, from the material above and below. Each card explains the story behind a headline: the background, how it works and why it matters, so a reader can follow what happens next. Choose the stories most worth understanding, from different parts of the world and of life, and fewer cards rather than weak ones.
+
+News cards follow stricter rules than the others:
+- Use only facts, names and figures that appear in the material. Your own knowledge stops before today: never fill a gap from it, and leave out a story whose facts are unclear.
+- Neutral wording: say what happened and what is at stake, never who is right.
+- Leave out elections, campaigns, party politics and political fights. Cover world events for what they mean for people, economies, health, science or the planet.
+- No deaths, disasters or crimes presented as spectacle.
+- topic: the subject behind the story, not the headline ("Why the Strait of Hormuz matters to oil prices", not "Tanker seized on Tuesday").
+- hook: what just happened, in one sentence, saying "this week" or the day where it helps.
+- angle: the question a curious reader would ask next, such as what happens now or how it will affect them.
+- category and tags: the topic and sub-topics the story belongs to, from: ${topics}. A heatwave belongs to nature (climate), a new drug to health (medicine), a company's collapse to business (companies).
+- origin: "news".
+
+${feeds ? `News feeds:\n\n${feeds}` : 'The news feeds could not be reached today; use the In the news section of the shared material, or return no cards.'}`;
+}
+
 function section(title, lines) {
   return lines.length ? `## ${title}\n${lines.map(l => `- ${l}`).join('\n')}` : '';
 }
@@ -247,6 +288,23 @@ export const CARD_SCHEMA = {
           figureLabel: { type: 'string' },
           angle: { type: 'string' },
         },
+      },
+    },
+  },
+};
+
+// The news call's cards choose their own topic.
+export const NEWS_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['cards'],
+  properties: {
+    cards: {
+      type: 'array',
+      items: {
+        ...CARD_SCHEMA.properties.cards.items,
+        required: [...CARD_SCHEMA.properties.cards.items.required, 'category'],
+        properties: { ...CARD_SCHEMA.properties.cards.items.properties, category: { type: 'string', enum: CATEGORY_IDS } },
       },
     },
   },
@@ -353,33 +411,49 @@ export async function generate(env, day, { fetchImpl = fetch, history = [] } = {
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   const model = exploreModel(env);
   const shared = sharedMessage(day, sources, avoid.map(a => a.topic));
-  const results = await Promise.allSettled(CATEGORY_IDS.map(async category => {
+  // One call per topic, and one for the news; all share the day's material.
+  const ask = async (text, schema) => {
     const response = await client.beta.messages.create({
       ...modelRequest(model),
       max_tokens: 8000,
-      output_config: { effort: 'medium', format: { type: 'json_schema', schema: CARD_SCHEMA } },
+      output_config: { effort: 'medium', format: { type: 'json_schema', schema } },
       system: SYSTEM,
       messages: [{
         role: 'user',
         content: [
           { type: 'text', text: shared, cache_control: { type: 'ephemeral' } },
-          { type: 'text', text: categoryMessage(category, sources) },
+          { type: 'text', text },
         ],
       }],
     });
     if (response.stop_reason === 'refusal') throw new Error(`refused: ${response.stop_details?.category || 'unknown'}`);
     if (response.stop_reason === 'max_tokens') throw new Error('reply was cut off');
-    const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('');
-    return { model: response.model, cards: cleanCards(JSON.parse(text)?.cards, { category }).slice(0, MAX_PER_CATEGORY) };
-  }));
+    return { model: response.model, cards: JSON.parse(response.content.filter(b => b.type === 'text').map(b => b.text).join(''))?.cards };
+  };
+  const [results, news] = await Promise.all([
+    Promise.allSettled(CATEGORY_IDS.map(async category => {
+      const r = await ask(categoryMessage(category, sources), CARD_SCHEMA);
+      return { model: r.model, cards: cleanCards(r.cards, { category }).slice(0, MAX_PER_CATEGORY) };
+    })),
+    ask(newsMessage(sources), NEWS_SCHEMA).then(
+      r => ({ model: r.model, cards: cleanCards(r.cards).slice(0, NEWS_CARDS).map(c => ({ ...c, origin: 'news', news: true })) }),
+      err => ({ error: err?.message || String(err), cards: [] }),
+    ),
+  ]);
   const byCategory = {};
   const failed = [];
   results.forEach((r, i) => {
     if (r.status === 'fulfilled') byCategory[CATEGORY_IDS[i]] = r.value.cards;
     else failed.push(`${CATEGORY_IDS[i]}: ${r.reason?.message || r.reason}`);
   });
+  if (news.error) failed.push(`news: ${news.error}`);
   if (failed.length) console.error(JSON.stringify({ level: 'warn', event: 'explore_category_failed', day, failed }));
-  const usedModel = results.find(r => r.status === 'fulfilled')?.value.model || model;
+  // News cards join the topics they chose, spread among that topic's own.
+  for (const id of CATEGORY_IDS) {
+    const mine = news.cards.filter(c => c.category === id);
+    if (mine.length) byCategory[id] = spreadIn(byCategory[id] || [], mine);
+  }
+  const usedModel = results.find(r => r.status === 'fulfilled')?.value.model || news.model || model;
   const feed = assembleFeed(day, byCategory, history, avoid.map(a => a.topic));
   const today = feed.cards.filter(c => !c.carried).length;
   if (today < MIN_TODAY) throw new Error(`only ${today} usable cards${failed.length ? ` (${failed.join('; ')})` : ''}`);
@@ -387,9 +461,16 @@ export async function generate(env, day, { fetchImpl = fetch, history = [] } = {
 }
 
 // Topics shown in the stored feeds, without duplicates: what not to repeat.
+// News is not held back for two weeks: a story that moves on can come back,
+// though not one from the newest list.
 export function recentTopics(history) {
   const seen = new Map();
-  for (const f of history) for (const c of f.cards || []) if (!seen.has(c.id)) seen.set(c.id, { id: c.id, topic: c.topic });
+  history.forEach((f, i) => {
+    for (const c of f.cards || []) {
+      if (isNews(c) && i >= NEWS_DAYS) continue;
+      if (!seen.has(c.id)) seen.set(c.id, { id: c.id, topic: c.topic });
+    }
+  });
   return [...seen.values()].slice(0, 300);
 }
 
@@ -409,7 +490,9 @@ export function assembleFeed(day, byCategory, history = [], avoid = []) {
   for (const f of history) {
     for (const c of f.cards || []) {
       if (carried >= MAX_CARRIED) break;
-      if (c.carried || !take(c)) continue;
+      if (c.carried) continue;
+      if (isNews(c) && dayNumber(day) - dayNumber(f.day) > NEWS_DAYS) continue;
+      if (!take(c)) continue;
       cards.push({ ...c, carried: true, day: f.day });
       carried++;
     }
@@ -485,7 +568,7 @@ export function cleanCards(raw, { category } = {}) {
     const key = slug(topic);
     if (!key || !seen.add(topic)) continue;
     const figure = clip(c.figure, LIMITS.figure);
-    const tags = [...new Set((Array.isArray(c.tags) ? c.tags : []).filter(t => TAG_IDS.includes(t)))].slice(0, 3);
+    const tags = [...new Set((Array.isArray(c.tags) ? c.tags : []).map(t => MOVED_TAGS[t]?.tag || t).filter(t => TAG_IDS.includes(t)))].slice(0, 3);
     out.push({
       id: key,
       topic,
@@ -580,15 +663,18 @@ export const EVERGREEN = cleanCards([
   T('ideas', ['paradoxes', 'philosophy'], 'topic', 'quick', 'familiar', { topic: 'The Ship of Theseus', hook: 'If you replace every plank of a ship one by one, is it still the same ship?', figure: '', figureLabel: '', angle: 'What does the Ship of Theseus say about personal identity?' }),
   T('culture', ['music'], 'topic', 'deep', 'surprising', { topic: 'The Goldberg Variations', hook: 'One aria, thirty variations, then the aria again, and somehow it sounds different the second time.', figure: '30', figureLabel: 'variations on one aria', angle: 'Why are Glenn Gould’s recordings of the Goldberg Variations so famous?' }),
   T('society', ['cities'], 'debate', 'quick', 'familiar', { topic: 'The 15-minute city', hook: 'Everything you need within a short walk or ride: sensible planning, or a slogan?', figure: '15 min', figureLabel: 'on foot or by bike', angle: 'Does the 15-minute city work, and why does it make some people angry?' }),
-  T('sport', ['economics', 'games'], 'topic', 'quick', 'familiar', { topic: 'Moneyball', hook: 'How a baseball team with little money used statistics to compete with the rich clubs.', figure: '2002', figureLabel: "the Oakland A's season", angle: 'How did analytics change professional sport after Moneyball?' }),
-  T('science', ['biology', 'health'], 'topic', 'deep', 'familiar', { topic: 'CRISPR gene editing', hook: 'A defence bacteria use against viruses, turned into a tool for rewriting DNA.', figure: '2020', figureLabel: 'Nobel Prize in Chemistry', angle: 'How does CRISPR find and cut one exact spot in a genome?' }),
+  T('sport', ['economy', 'games'], 'topic', 'quick', 'familiar', { topic: 'Moneyball', hook: 'How a baseball team with little money used statistics to compete with the rich clubs.', figure: '2002', figureLabel: "the Oakland A's season", angle: 'How did analytics change professional sport after Moneyball?' }),
+  T('science', ['biology', 'medicine'], 'topic', 'deep', 'familiar', { topic: 'CRISPR gene editing', hook: 'A defence bacteria use against viruses, turned into a tool for rewriting DNA.', figure: '2020', figureLabel: 'Nobel Prize in Chemistry', angle: 'How does CRISPR find and cut one exact spot in a genome?' }),
   T('ideas', ['philosophy', 'psychology'], 'topic', 'quick', 'familiar', { topic: 'Stoicism', hook: 'A philosophy from a painted porch in Athens about what is and is not up to you.', figure: 'c. 300 BC', figureLabel: 'founded by Zeno in Athens', angle: 'What did the Stoics mean by focusing on what you can control?' }),
   T('culture', ['food'], 'topic', 'quick', 'surprising', { topic: 'The Maillard reaction', hook: 'The browning that makes toast, steak and coffee taste like themselves.', figure: '1912', figureLabel: 'described by Louis-Camille Maillard', angle: 'What actually happens to food in the Maillard reaction?' }),
   T('sport', ['games', 'ai'], 'topic', 'quick', 'familiar', { topic: 'Deep Blue versus Kasparov', hook: 'The chess matches that made a computer beating a world champion front-page news.', figure: '1997', figureLabel: 'the rematch Deep Blue won', angle: 'Did Deep Blue really out-think Kasparov, or something else?' }),
   T('sport', ['motorsport', 'engineering'], 'myth', 'quick', 'surprising', { topic: 'Formula 1 aerodynamics', hook: 'Wings and floors that press a car into the track harder the faster it goes.', figure: '', figureLabel: '', angle: 'Could a Formula 1 car really drive upside down on a ceiling?' }),
   T('history', ['ancient', 'books'], 'myth', 'deep', 'familiar', { topic: 'The Library of Alexandria', hook: 'The ancient world’s great library, and the stubborn story of how it was lost.', figure: '', figureLabel: '', angle: 'Was the Library of Alexandria really destroyed in a single fire?' }),
   T('nature', ['animals'], 'topic', 'quick', 'surprising', { topic: 'Starling murmurations', hook: 'Thousands of birds turning as one cloud, with no leader and no plan.', figure: '', figureLabel: '', angle: 'How do starlings in a murmuration avoid crashing into each other?' }),
-  T('science', ['health', 'psychology'], 'debate', 'deep', 'familiar', { topic: 'The placebo effect', hook: 'Pills with nothing in them that still help, sometimes even when you know.', figure: '', figureLabel: '', angle: 'Is the placebo effect real healing, or just a quirk of how trials are measured?' }),
+  T('health', ['medicine', 'mind'], 'debate', 'deep', 'familiar', { topic: 'The placebo effect', hook: 'Pills with nothing in them that still help, sometimes even when you know.', figure: '', figureLabel: '', angle: 'Is the placebo effect real healing, or just a quirk of how trials are measured?' }),
+  T('health', ['body', 'mind'], 'topic', 'deep', 'familiar', { topic: 'Why we sleep', hook: 'Every animal studied sleeps, and losing it does things to the body scientists are still mapping.', figure: '', figureLabel: '', angle: 'What actually happens in the brain while we sleep?' }),
+  T('business', ['markets'], 'myth', 'quick', 'familiar', { topic: 'Tulip mania', hook: 'Dutch tulip bulbs once traded for fortunes, or so the famous story of the first bubble goes.', figure: '1637', figureLabel: 'when the prices collapsed', angle: 'Was tulip mania really the first great financial bubble?' }),
+  T('business', ['companies', 'inventions'], 'topic', 'quick', 'surprising', { topic: 'The shipping container', hook: 'A plain steel box that made world trade cheap and reshaped ports, cities and work.', figure: '1956', figureLabel: 'first container voyage', angle: 'How did the shipping container change the world economy?' }),
 ]);
 
 export function evergreenFeed(day) {

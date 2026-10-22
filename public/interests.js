@@ -7,16 +7,17 @@
 //   topics   { categories: [id], tags: [id] }   the topics switched on, and
 //            the sub-topics ticked under them; DEFAULT_TOPICS until the
 //            visitor changes anything
+//   news     false to leave out current events (on unless switched off)
 //
 // A card shows when its topic is on and, if it has sub-topics, at least one
 // of them is ticked. That holds for every card in the list, including those a
 // collection from the card manager published into it.
 
-import { CATEGORIES, CATEGORY_IDS, TAG_IDS } from './categories.js?v=ff28f9ba8d';
+import { CATEGORIES, CATEGORY_IDS, TAG_IDS, MOVED_TAGS, isNews } from './categories.js?v=ce4a88d427';
 
-// Six topics to start with, every sub-topic ticked; Society and Sport are
+// Eight topics to start with, every sub-topic ticked; Society and Sport are
 // there to switch on.
-const DEFAULT_CATEGORIES = ['science', 'technology', 'nature', 'history', 'culture', 'ideas'];
+const DEFAULT_CATEGORIES = ['science', 'health', 'technology', 'nature', 'history', 'culture', 'business', 'ideas'];
 export const DEFAULT_TOPICS = {
   categories: DEFAULT_CATEGORIES,
   tags: CATEGORIES.filter(c => DEFAULT_CATEGORIES.includes(c.id)).flatMap(c => c.tags.map(t => t.id)),
@@ -25,10 +26,17 @@ export const DEFAULT_TOPICS = {
 export function prefsFrom(setting) {
   const raw = setting('topics', null);
   const t = raw && typeof raw === 'object' && Array.isArray(raw.categories) ? raw : DEFAULT_TOPICS;
-  return {
-    categories: new Set(t.categories.filter(id => CATEGORY_IDS.includes(id))),
-    tags: new Set((t.tags || []).filter(id => TAG_IDS.includes(id))),
-  };
+  const categories = new Set(t.categories.filter(id => CATEGORY_IDS.includes(id)));
+  const tags = new Set((t.tags || []).filter(id => TAG_IDS.includes(id)));
+  // Someone who had a sub-topic that became a topic of its own gets that
+  // topic, with all of its sub-topics.
+  for (const old of t.tags || []) {
+    const moved = MOVED_TAGS[old];
+    if (!moved || categories.has(moved.category)) continue;
+    categories.add(moved.category);
+    for (const x of CATEGORIES.find(c => c.id === moved.category).tags) tags.add(x.id);
+  }
+  return { categories, tags, news: setting('news', true) !== false };
 }
 
 // The settings value for a set of choices, in a stable order.
@@ -40,6 +48,7 @@ export function topicsValue(prefs) {
 }
 
 export function visible(card, prefs) {
+  if (prefs.news === false && isNews(card)) return false;
   if (!prefs.categories.has(card.category)) return false;
   const tags = card.tags || [];
   return !tags.length || tags.some(t => prefs.tags.has(t));

@@ -1,16 +1,16 @@
 // Tell me everything about — the home page: a sentence to finish.
 //
-// State, sync and the account live in store.js?v=ff28f9ba8d, shared with the prompts
+// State, sync and the account live in store.js?v=ce4a88d427, shared with the prompts
 // settings page (/settings), where prompts are written and settings kept. This page
 // draws the selected prompt as a sentence with a box for each blank, launches
 // it, and shows Explore under it.
 
-import * as store from './store.js?v=ff28f9ba8d';
-import { ENGINES, engineById } from './engines.js?v=ff28f9ba8d';
-import { parse, fill, defaultLabel, autoValues } from './template.js?v=ff28f9ba8d';
-import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=ff28f9ba8d';
-import { createExplore } from './explore.js?v=ff28f9ba8d';
-import { prefsFrom } from './interests.js?v=ff28f9ba8d';
+import * as store from './store.js?v=ce4a88d427';
+import { ENGINES, engineById } from './engines.js?v=ce4a88d427';
+import { parse, fill, defaultLabel, autoValues } from './template.js?v=ce4a88d427';
+import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=ce4a88d427';
+import { createExplore } from './explore.js?v=ce4a88d427';
+import { prefsFrom } from './interests.js?v=ce4a88d427';
 
 const FEED_KEY = 'tmea:explore-feed';
 // A copy fetched this recently is not asked for again (rapid reloads).
@@ -416,7 +416,7 @@ function clearPreview() {
 
 // The first box's grey text: the blank's name, or the current suggestion.
 // A suggestion sits in a box of fixed width, smaller and on one line, so a
-// long topic can never rewrap the sentence and move the page (app.css?v=ff28f9ba8d).
+// long topic can never rewrap the sentence and move the page (app.css?v=ce4a88d427).
 function paintGhost() {
   const ghost = ghostOf(inputs[0]);
   if (!ghost) return;

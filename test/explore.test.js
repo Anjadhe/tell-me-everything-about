@@ -355,3 +355,41 @@ test('spreadIn places cards at even intervals, never all at the end', () => {
   assert.deepEqual(spreadIn([], ['x']), ['x']);
   assert.deepEqual(spreadIn(['x'], []), ['x']);
 });
+
+import { newsMessage, NEWS_SCHEMA, NEWS_FEEDS, NEWS_DAYS } from '../src/explore.js';
+import { currentCard, isNews } from '../public/categories.js';
+
+test('cards from before Health and Business were topics are brought up to date', () => {
+  assert.deepEqual(currentCard({ category: 'science', tags: ['health', 'psychology'] }), { category: 'health', tags: ['medicine', 'psychology'] });
+  assert.deepEqual(currentCard({ category: 'science', tags: ['biology', 'health'] }), { category: 'science', tags: ['biology', 'medicine'] });
+  assert.deepEqual(currentCard({ category: 'society', tags: ['economics'] }), { category: 'business', tags: ['economy'] });
+  const untouched = { category: 'ideas', tags: ['philosophy'] };
+  assert.equal(currentCard(untouched), untouched);
+  assert.deepEqual(cleanCards([card({ tags: ['health', 'space'] })])[0].tags, ['medicine', 'space']);
+});
+
+test('the news call files stories under existing topics, with stricter rules', () => {
+  const m = newsMessage({ wiki: wikiLines(null), feeds: { bbcworld: ['Tanker seized in the Strait of Hormuz'] } });
+  assert.match(m, /BBC News: world \(origin: news\)\n- Tanker seized/);
+  assert.match(m, /Use only facts, names and figures that appear in the material/);
+  assert.match(m, /Leave out elections, campaigns, party politics/);
+  assert.match(m, /health \(Health: medicine, body/);
+  assert.deepEqual(NEWS_SCHEMA.properties.cards.items.properties.category.enum, CATEGORY_IDS);
+  assert.ok(NEWS_SCHEMA.properties.cards.items.required.includes('category'));
+  for (const f of NEWS_FEEDS) assert.ok(FEEDS[f], f);
+});
+
+test('news lasts a day: carried once, then gone; and an old story may come back', () => {
+  const n = (id, topic) => ({ id, topic, category: 'nature', tags: ['climate'], origin: 'news', news: true });
+  const history = [
+    { day: '2026-10-22', cards: [n('heat-1', 'Why this heatwave broke records')] },
+    { day: '2026-10-21', cards: [n('flood-1', 'How the river flood spread'), { id: 'kept', topic: 'Kept', category: 'ideas' }] },
+  ];
+  const ids = assembleFeed('2026-10-23', {}, history).cards.map(c => c.id);
+  assert.deepEqual(ids, ['heat-1', 'kept']);
+  assert.equal(NEWS_DAYS, 1);
+  const avoid = recentTopics(history).map(t => t.id);
+  assert.ok(avoid.includes('heat-1') && !avoid.includes('flood-1') && avoid.includes('kept'));
+  assert.equal(isNews({ origin: 'news' }), true);
+  assert.equal(isNews({ origin: 'til' }), false);
+});

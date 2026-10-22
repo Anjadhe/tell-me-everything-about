@@ -91,3 +91,22 @@ test('collection cards are chosen by topic like any other, with no head start', 
   const cards = [c('d1', 'science', { tags: ['space'] }), c('in-x-a', 'science', { tags: ['space'], pack: 'x' }), c('in-x-b', 'history', { tags: ['ancient'], pack: 'x' }), c('in-x-c', 'science', { tags: ['biology'], pack: 'x' })];
   assert.deepEqual(rank(cards, p).map(x => x.id), ['d1', 'in-x-a']);
 });
+
+test('Health and Business are on from the start, with every sub-topic', () => {
+  const p = prefsFrom(settings());
+  assert.ok(p.categories.has('health') && p.categories.has('business'));
+  assert.ok(p.tags.has('medicine') && p.tags.has('markets'));
+});
+
+test('someone who had a sub-topic that became a topic gets that topic', () => {
+  const p = prefsFrom(settings({ topics: { categories: ['science'], tags: ['space', 'health'] } }));
+  assert.ok(p.categories.has('health') && p.tags.has('medicine') && p.tags.has('body'));
+  assert.equal(p.categories.has('business'), false);
+});
+
+test('current events can be left out as a whole', () => {
+  const news = c('n', 'nature', { tags: ['climate'], origin: 'news', news: true });
+  assert.equal(visible(news, prefsFrom(settings())), true);
+  assert.equal(visible(news, prefsFrom(settings({ news: false }))), false);
+  assert.equal(visible(c('d', 'nature', { tags: ['climate'] }), prefsFrom(settings({ news: false }))), true);
+});

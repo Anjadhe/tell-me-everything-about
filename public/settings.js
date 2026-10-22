@@ -6,12 +6,12 @@
 //
 // Everything saves as you type. A new prompt is kept once it has words.
 
-import * as store from './store.js?v=ff28f9ba8d';
-import { ENGINES, engineById } from './engines.js?v=ff28f9ba8d';
-import { describe, AUTO_FILLS, autoValues, fill, defaultLabel, highlight, parse } from './template.js?v=ff28f9ba8d';
-import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=ff28f9ba8d';
-import { CATEGORIES, categoryById, KINDS } from './categories.js?v=ff28f9ba8d';
-import { prefsFrom, topicsValue, setCategory, setTag, DEFAULT_TOPICS } from './interests.js?v=ff28f9ba8d';
+import * as store from './store.js?v=ce4a88d427';
+import { ENGINES, engineById } from './engines.js?v=ce4a88d427';
+import { describe, AUTO_FILLS, autoValues, fill, defaultLabel, highlight, parse } from './template.js?v=ce4a88d427';
+import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=ce4a88d427';
+import { CATEGORIES, categoryById, KINDS } from './categories.js?v=ce4a88d427';
+import { prefsFrom, topicsValue, setCategory, setTag, DEFAULT_TOPICS } from './interests.js?v=ce4a88d427';
 
 const EXAMPLES = [
   { label: 'Compare', template: 'Compare {thing} with {other thing}: how they differ, where each one wins, and which to choose when' },
@@ -552,6 +552,7 @@ function renderSettings() {
   $('#s-newtab').checked = !!store.setting('newTab', false);
   $('#v-theme').textContent = THEMES.find(t => t[0] === store.setting('theme', 'system'))[1];
   $('#s-explore').checked = store.setting('explore', true) !== false;
+  $('#s-news').checked = store.setting('news', true) !== false;
   $('#v-topics').textContent = `${prefsFrom(store.setting).categories.size} of ${CATEGORIES.length}`;
   $('#s-recent').checked = store.recentOn();
   const user = store.currentUser();
@@ -564,6 +565,7 @@ function renderSettings() {
 
 $('#s-newtab').addEventListener('change', e => store.updateSettings({ newTab: e.target.checked }));
 $('#s-explore').addEventListener('change', e => store.updateSettings({ explore: e.target.checked }));
+$('#s-news').addEventListener('change', e => store.updateSettings({ news: e.target.checked }));
 $('#s-recent').addEventListener('change', e => store.setRecentOn(e.target.checked));
 
 function renderDetail() {

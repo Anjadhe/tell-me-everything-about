@@ -6,6 +6,13 @@ A home page that finishes your prompt for you. Pick a prompt, type a topic,
 press Enter, and it opens in Google AI Mode, Perplexity, ChatGPT, Claude or
 wherever you like. Up to six prompts, each with its own destination.
 
+Topics are Science, Health, Technology, Nature, History, Culture, Business,
+Society, Ideas and Sport, five sub-topics each (`public/categories.js`). A
+daily news call also writes about 12 explainers from BBC News, The Guardian,
+NPR and Wikipedia's In the news, filed under those topics, marked "In the
+news" and carried for one day only; elections and party politics are left
+out. Visitors can switch current events off.
+
 Under the box, **Explore** shows the day's topics as cards, the way Firefox's
 new tab once showed Pocket stories. A card is only a topic: it opens with
 whichever prompt is selected, in that prompt's engine. Each morning a cron in

@@ -10,6 +10,7 @@
 import { merge, normalize, sameState } from '../public/merge.js';
 import { ENGINE_IDS, LAUNCH_FROM, tagRows, lastDays } from './usage.js';
 import { generate, evergreenFeed, sponsoredCard, pinnedCard, interestKey, generateInterest, PACK_FRESH_DAYS, adminCard, rowForEditor, addToList, recentTopics } from './explore.js';
+import { currentCard } from '../public/categories.js';
 
 const SESSION_COOKIE = 'tmea_session';
 const SESSION_DAYS = 90;
@@ -356,8 +357,11 @@ async function getExplore(request, env, ctx) {
     env.DB.prepare('SELECT * FROM pinned WHERE active = 1 AND (starts IS NULL OR starts <= ?) AND (ends IS NULL OR ends >= ?) ORDER BY position, id').bind(day, day),
   ]);
   const feed = latest.results[0] ? JSON.parse(latest.results[0].data) : evergreenFeed(day);
-  feed.sponsored = campaigns.results.map(sponsoredCard).filter(Boolean);
-  feed.pinned = pins.results.map(pinnedCard).filter(Boolean);
+  // Cards stored before Health and Business were topics are served as if
+  // written after.
+  feed.cards = feed.cards.map(currentCard);
+  feed.sponsored = campaigns.results.map(sponsoredCard).filter(Boolean).map(currentCard);
+  feed.pinned = pins.results.map(pinnedCard).filter(Boolean).map(currentCard);
   const body = JSON.stringify(feed);
   const res = new Response(body, {
     headers: {
@@ -526,7 +530,7 @@ async function listCards(env, q) {
     const days = (await env.DB.prepare('SELECT day FROM explore ORDER BY day DESC LIMIT 30').all()).results.map(r => r.day);
     const day = days.includes(q.get('day')) ? q.get('day') : days[0] || null;
     const row = day ? await env.DB.prepare('SELECT data FROM explore WHERE day = ?').bind(day).first() : null;
-    return json({ days, day, cards: row ? JSON.parse(row.data).cards : [] });
+    return json({ days, day, cards: row ? JSON.parse(row.data).cards.map(currentCard) : [] });
   }
   if (collection === 'packs') {
     const rows = (await env.DB.prepare('SELECT key, name, suitable, hits, created_at, data, alias_of FROM interest_packs ORDER BY hits DESC, key').all()).results;
@@ -543,12 +547,12 @@ async function listCards(env, q) {
   if (collection === 'pack') {
     const r = await env.DB.prepare('SELECT * FROM interest_packs WHERE key = ? AND alias_of IS NULL').bind(q.get('key') || '').first();
     if (!r) return json({ error: 'No such pack.' }, 404);
-    return json({ key: r.key, name: r.name, suitable: !!r.suitable, cards: JSON.parse(r.data) });
+    return json({ key: r.key, name: r.name, suitable: !!r.suitable, cards: JSON.parse(r.data).map(currentCard) });
   }
   if (collection === 'sponsored' || collection === 'pinned') {
     const order = collection === 'pinned' ? 'position, id' : 'id';
     const rows = (await env.DB.prepare(`SELECT * FROM ${collection} ORDER BY ${order}`).all()).results;
-    return json({ cards: rows.map(r => rowForEditor(r, collection)) });
+    return json({ cards: rows.map(r => currentCard(rowForEditor(r, collection))) });
   }
   return json({ error: 'Unknown collection.' }, 400);
 }
