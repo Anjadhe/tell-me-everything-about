@@ -16,7 +16,7 @@ const SESSION_DAYS = 90;
 const LINK_MINUTES = 15;
 const LINKS_PER_EMAIL_PER_HOUR = 5;
 const LINKS_PER_IP_PER_HOUR = 20;
-const MAX_STATE_BYTES = 32 * 1024;
+const MAX_STATE_BYTES = 192 * 1024; // prompts, settings, and up to 150 saved cards
 const EXPLORE_KEEP_DAYS = 30;
 const EXPLORE_EDGE_SECONDS = 900;
 

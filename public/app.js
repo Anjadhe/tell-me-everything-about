@@ -1,16 +1,16 @@
 // Tell me everything about — the home page: a sentence to finish.
 //
-// State, sync and the account live in store.js?v=98030b1b32, shared with the prompts
+// State, sync and the account live in store.js?v=8f1b98feb3, shared with the prompts
 // page (/prompts) where prompts are written and settings are kept. This page
 // draws the selected prompt as a sentence with a box for each blank, launches
 // it, and shows Explore under it.
 
-import * as store from './store.js?v=98030b1b32';
-import { ENGINES, engineById } from './engines.js?v=98030b1b32';
-import { parse, fill, defaultLabel } from './template.js?v=98030b1b32';
-import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=98030b1b32';
-import { createExplore } from './explore.js?v=98030b1b32';
-import { prefsFrom } from './interests.js?v=98030b1b32';
+import * as store from './store.js?v=8f1b98feb3';
+import { ENGINES, engineById } from './engines.js?v=8f1b98feb3';
+import { parse, fill, defaultLabel, autoValues } from './template.js?v=8f1b98feb3';
+import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=8f1b98feb3';
+import { createExplore } from './explore.js?v=8f1b98feb3';
+import { prefsFrom } from './interests.js?v=8f1b98feb3';
 
 const FEED_KEY = 'tmea:explore-feed';
 const FEED_FRESH_MS = 30 * 60 * 1000;
@@ -18,7 +18,7 @@ const FEED_FRESH_MS = 30 * 60 * 1000;
 const $ = s => document.querySelector(s);
 const tabsEl = $('#prompt-tabs');
 const sentenceEl = $('#sentence');
-const wholeEl = $('#whole');
+const previewEl = $('#sentence-preview');
 const engineBtn = $('#engine-btn');
 const engineName = $('#engine-name');
 const engineMenu = $('#engine-menu');
@@ -320,6 +320,12 @@ function renderExplore() {
     updatePrefs: patch => store.updateSettings(patch),
     recent: store.recentTopics,
     report: countSponsored,
+    saved: store.savedCards,
+    isSaved: store.isSaved,
+    toggleSave(card) {
+      if (store.isSaved(card.id)) { store.unsaveCard(card.id); return 'removed'; }
+      return store.saveCard(card) ? 'saved' : 'full';
+    },
     launched(kind, topic, e) {
       countLaunch(currentEngine().id, kind);
       store.remember(topic);
@@ -354,42 +360,62 @@ async function loadFeed() {
   }
 }
 
-// Hovering a card writes it into the first box, or a card's question in
-// place of the sentence, so you see exactly what will be asked. The stage
-// keeps its height (app.css?v=98030b1b32), so nothing below moves.
+// Hovering a card shows the sentence it would ask: the topic in the first
+// box, or the card's question on its own. It is drawn over the sentence in
+// a layer of exactly the same size, with the type made smaller until it
+// fits, so the page never moves however long the topic is.
 function preview(kind, text) {
   previewing = kind;
-  const slot = inputs[0]?.parentElement;
+  previewEl.replaceChildren();
   if (kind === 'question') {
-    slot?.classList.remove('previewing');
-    wholeEl.textContent = text;
-    sentenceEl.classList.add('whole-preview');
-  } else if (slot) {
-    sentenceEl.classList.remove('whole-preview');
-    slot.classList.remove('suggesting');
-    slot.classList.add('previewing');
-    slot.dataset.value = text;
-    ghostOf(inputs[0]).textContent = text;
+    previewEl.append(span('pv-fill', text));
+  } else {
+    const autos = autoValues();
+    let first = true;
+    for (const p of parse(template()).parts) {
+      if (p.type === 'text') previewEl.append(span('lit', p.text));
+      else if (p.type === 'auto') previewEl.append(span('auto', autos[p.key] ?? ''));
+      else if (first) { previewEl.append(span('pv-fill', text)); first = false; }
+      else previewEl.append(span('pv-blank', inputs.find(i => i.dataset.blank === p.id)?.value || p.name));
+    }
   }
+  previewEl.style.top = `${sentenceEl.offsetTop}px`;
+  previewEl.style.height = `${sentenceEl.offsetHeight}px`;
+  previewEl.hidden = false;
+  sentenceEl.classList.add('under-preview');
+  fitPreview();
+}
+
+function fitPreview() {
+  let size = parseFloat(getComputedStyle(sentenceEl).fontSize);
+  previewEl.style.fontSize = `${size}px`;
+  while (previewEl.scrollHeight > previewEl.clientHeight + 1 && size > 16) {
+    size = Math.max(16, size * 0.9);
+    previewEl.style.fontSize = `${size}px`;
+  }
+}
+
+function span(cls, text) {
+  const s = document.createElement('span');
+  s.className = cls;
+  s.textContent = text;
+  return s;
 }
 
 function clearPreview() {
   if (!previewing) return;
   previewing = null;
-  sentenceEl.classList.remove('whole-preview');
-  const slot = inputs[0]?.parentElement;
-  if (!slot) return;
-  slot.classList.remove('previewing');
-  slot.dataset.value = inputs[0].value;
-  paintGhost();
+  previewEl.hidden = true;
+  previewEl.replaceChildren();
+  sentenceEl.classList.remove('under-preview');
 }
 
 // The first box's grey text: the blank's name, or the current suggestion.
 // A suggestion sits in a box of fixed width, smaller and on one line, so a
-// long topic can never rewrap the sentence and move the page (app.css?v=98030b1b32).
+// long topic can never rewrap the sentence and move the page (app.css?v=8f1b98feb3).
 function paintGhost() {
   const ghost = ghostOf(inputs[0]);
-  if (!ghost || previewing) return;
+  if (!ghost) return;
   const on = !!suggestion && single();
   ghost.parentElement.classList.toggle('suggesting', on);
   ghost.textContent = on ? suggestion : ghost.dataset.name;

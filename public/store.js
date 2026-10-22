@@ -7,9 +7,9 @@
 // clobbering the other. Two tabs of this site stay in step through the
 // storage event, and a page restored from the back-forward cache re-reads.
 
-import { merge, emptyState, normalize, sameState, MAX_PROMPTS } from './merge.js?v=98030b1b32';
+import { merge, emptyState, normalize, sameState, MAX_PROMPTS, MAX_SAVED, SAVED_PREFIX } from './merge.js?v=8f1b98feb3';
 
-export { MAX_PROMPTS };
+export { MAX_PROMPTS, MAX_SAVED };
 
 const STORE_KEY = 'tmea:state';
 const THEME_KEY = 'tmea:theme';
@@ -122,6 +122,46 @@ export function reorder(ids) {
   const byId = new Map(state.prompts.map(p => [p.id, p]));
   const next = ids.map((id, i) => ({ ...byId.get(id), order: i, updatedAt: now }));
   save({ ...state, prompts: next });
+}
+
+// ---------- saved Explore cards ----------
+
+// Saved like prompts: kept here, merged per card through the account when
+// signed in. Only what is needed to draw and ask the card is kept.
+const CARD_FIELDS = ['id', 'topic', 'hook', 'category', 'tags', 'kind', 'depth', 'surprise', 'origin', 'figure', 'figureLabel', 'angle'];
+
+export function savedCards() {
+  return state.saved.map(r => r.card);
+}
+
+export function isSaved(id) {
+  return state.saved.some(r => r.id === id);
+}
+
+// False when the list is full.
+export function saveCard(card) {
+  if (isSaved(card.id)) return true;
+  if (state.saved.length >= MAX_SAVED) return false;
+  const now = new Date().toISOString();
+  const kept = {};
+  for (const k of CARD_FIELDS) if (card[k] !== undefined) kept[k] = card[k];
+  save({ ...state, saved: [{ id: card.id, card: kept, savedAt: now, updatedAt: now }, ...state.saved] });
+  return true;
+}
+
+export function unsaveCard(id) {
+  save({
+    ...state,
+    saved: state.saved.filter(r => r.id !== id),
+    tombstones: { ...state.tombstones, [SAVED_PREFIX + id]: new Date().toISOString() },
+  });
+}
+
+export function unsaveAll() {
+  const now = new Date().toISOString();
+  const tombstones = { ...state.tombstones };
+  for (const r of state.saved) tombstones[SAVED_PREFIX + r.id] = now;
+  save({ ...state, saved: [], tombstones });
 }
 
 // The prompt the home page shows. The prompts page sets it to the one being

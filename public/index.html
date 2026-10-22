@@ -7,16 +7,16 @@
 <meta name="description" content="A home page that finishes your prompt for you. Type a topic, press Enter, and it opens in Google AI Mode, Perplexity, ChatGPT or wherever you like.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/app.css?v=98030b1b32">
-<link rel="modulepreload" href="/app.js?v=98030b1b32">
-<link rel="modulepreload" href="/merge.js?v=98030b1b32">
-<link rel="modulepreload" href="/store.js?v=98030b1b32">
-<link rel="modulepreload" href="/engines.js?v=98030b1b32">
-<link rel="modulepreload" href="/template.js?v=98030b1b32">
-<link rel="modulepreload" href="/sentence.js?v=98030b1b32">
-<link rel="modulepreload" href="/explore.js?v=98030b1b32">
-<link rel="modulepreload" href="/interests.js?v=98030b1b32">
-<link rel="modulepreload" href="/categories.js?v=98030b1b32">
+<link rel="stylesheet" href="/app.css?v=8f1b98feb3">
+<link rel="modulepreload" href="/app.js?v=8f1b98feb3">
+<link rel="modulepreload" href="/merge.js?v=8f1b98feb3">
+<link rel="modulepreload" href="/store.js?v=8f1b98feb3">
+<link rel="modulepreload" href="/engines.js?v=8f1b98feb3">
+<link rel="modulepreload" href="/template.js?v=8f1b98feb3">
+<link rel="modulepreload" href="/sentence.js?v=8f1b98feb3">
+<link rel="modulepreload" href="/explore.js?v=8f1b98feb3">
+<link rel="modulepreload" href="/interests.js?v=8f1b98feb3">
+<link rel="modulepreload" href="/categories.js?v=8f1b98feb3">
 <script>try{var t=localStorage.getItem('tmea:theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body>
@@ -38,7 +38,8 @@
   <div id="prompt-tabs" class="tabs" role="tablist" aria-label="Prompts"></div>
 
   <form id="ask" class="ask" autocomplete="off">
-    <div class="sentence" id="sentence" role="group" aria-label="Your prompt"><span id="whole" class="whole keep" aria-hidden="true"></span></div>
+    <div class="sentence" id="sentence" role="group" aria-label="Your prompt"><span class="keep" hidden></span></div>
+    <div class="sentence sentence-preview" id="sentence-preview" aria-hidden="true" hidden></div>
     <div class="meta">
       <span class="meta-left">
       <button type="button" id="engine-btn" class="engine" aria-haspopup="menu" aria-expanded="false">
@@ -108,6 +109,6 @@
   </form>
 </dialog>
 
-<script type="module" src="/app.js?v=98030b1b32"></script>
+<script type="module" src="/app.js?v=8f1b98feb3"></script>
 </body>
 </html>

@@ -8,7 +8,7 @@
 // first box instead.
 //
 // Which cards, in what order, is decided here in the browser from the
-// visitor's preferences (interests.js?v=98030b1b32). Feedback hides or nudges without
+// visitor's preferences (interests.js?v=8f1b98feb3). Feedback hides or nudges without
 // reshuffling what is on screen: the order is fixed until the visitor picks
 // another pill, finishes the picker, or comes back later.
 //
@@ -16,8 +16,8 @@
 // for science, strata for history, …), varied by a seed from the topic so no
 // two look alike, with the card's one striking figure set large on top.
 
-import { CATEGORIES, categoryById, tagById, ORIGINS, KINDS, DEPTHS } from './categories.js?v=98030b1b32';
-import { rank, feedback, placeSponsored } from './interests.js?v=98030b1b32';
+import { CATEGORIES, categoryById, tagById, ORIGINS, KINDS, DEPTHS } from './categories.js?v=8f1b98feb3';
+import { rank, feedback, placeSponsored } from './interests.js?v=8f1b98feb3';
 
 // Three rows to start (the wide lead card, then three and three); each
 // "Show more" adds two rows under them.
@@ -31,7 +31,7 @@ const SEEN_KEY = 'tmea:explore-seen';
 const SEEN_DAYS = 21;
 const VIEWED_KEY = 'tmea:sponsored-viewed';
 
-export function createExplore({ root, link, fill, preview, clearPreview, launched, prefs, updatePrefs, recent, report, tuneHref = '/prompts#settings' }) {
+export function createExplore({ root, link, fill, preview, clearPreview, launched, prefs, updatePrefs, recent, report, saved, isSaved, toggleSave, tuneHref = '/prompts#settings' }) {
   const cardsEl = root.querySelector('.cards');
   const recentEl = root.querySelector('.recent');
   const pillsEl = root.querySelector('.pills');
@@ -53,7 +53,7 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
   let feed = null;
   let count = FIRST;
   let shown = [];
-  let pill = null;        // a category, or null for "For you"
+  let pill = null;        // a category, 'saved', or null for "For you"
   let frozen = null;      // card ids in the order first shown
 
   function ranked(category = pill) {
@@ -64,6 +64,7 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
   // The ranked list in the order already on screen: cards that are now hidden
   // drop out and the gap closes, newly eligible ones join at the end.
   function ordered() {
+    if (pill === 'saved') return saved();
     const fresh = ranked();
     if (!frozen) { frozen = fresh.map(c => c.id); return fresh; }
     const byId = new Map(fresh.map(c => [c.id, c]));
@@ -85,7 +86,7 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     renderPicker();
     if (!feed) { renderSkeleton(); return; }
     renderPills();
-    const list = placeSponsored(ordered(), feed.sponsored || [], prefs(), { dismissed: readDismissed(), category: pill });
+    const list = pill === 'saved' ? ordered() : placeSponsored(ordered(), feed.sponsored || [], prefs(), { dismissed: readDismissed(), category: pill });
     shown = list.slice(0, count);
     cardsEl.innerHTML = '';
     cardsEl.removeAttribute('aria-busy');
@@ -93,11 +94,15 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     if (!shown.length) {
       const empty = document.createElement('p');
       empty.className = 'explore-empty';
-      empty.append('Nothing here with your current choices. ');
-      const a = document.createElement('a');
-      a.href = tuneHref;
-      a.textContent = 'Change what Explore shows';
-      empty.append(a, '.');
+      if (pill === 'saved') {
+        empty.textContent = 'Nothing saved yet. Use the bookmark on any card to keep it here.';
+      } else {
+        empty.append('Nothing here with your current choices. ');
+        const a = document.createElement('a');
+        a.href = tuneHref;
+        a.textContent = 'Change what Explore shows';
+        empty.append(a, '.');
+      }
       cardsEl.appendChild(empty);
     }
     markSeen(shown.filter(c => !c.sponsored), feed.day);
@@ -127,7 +132,8 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     const p = prefs();
     const all = ranked(null);
     const cats = CATEGORIES.filter(c => p.catPrefs[c.id] !== 'hide' && all.some(x => x.category === c.id));
-    if (pill && !cats.some(c => c.id === pill)) pill = null;
+    const savedCount = saved().length;
+    if (pill && pill !== 'saved' && !cats.some(c => c.id === pill)) pill = null;
     pillsEl.hidden = false;
     pillsEl.innerHTML = '';
     const make = (id, name, hue) => {
@@ -145,6 +151,7 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
       pillsEl.appendChild(b);
     };
     make(null, 'For you');
+    if (savedCount || pill === 'saved') make('saved', `Saved · ${savedCount}`);
     for (const c of cats) make(c.id, c.name, c.hue);
     const tune = document.createElement('a');
     tune.className = 'pill-tune';
@@ -308,6 +315,15 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
       v.addEventListener('click', () => report?.(c.id, 'click'));
       foot.appendChild(v);
     }
+    if (!c.sponsored) {
+      const keep = document.createElement('button');
+      keep.type = 'button';
+      keep.className = 'card-save';
+      keep.innerHTML = '<svg width="13" height="14" viewBox="0 0 24 26" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h14v20l-7-5-7 5z"/></svg>';
+      paintSave(keep, c);
+      keep.addEventListener('click', e => { e.stopPropagation(); toggle(c); });
+      foot.appendChild(keep);
+    }
     const more = document.createElement('button');
     more.type = 'button';
     more.className = 'card-more';
@@ -320,6 +336,32 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     foot.appendChild(more);
     el.appendChild(foot);
     return el;
+  }
+
+  function paintSave(button, c) {
+    const on = isSaved(c.id);
+    button.setAttribute('aria-pressed', String(on));
+    button.setAttribute('aria-label', on ? `Remove ${c.topic} from saved` : `Save ${c.topic}`);
+    button.title = on ? 'Saved' : 'Save';
+  }
+
+  // Save or unsave. Saving also counts as "more like this".
+  function toggle(c) {
+    const was = isSaved(c.id);
+    const before = prefs();
+    const result = toggleSave(c);
+    if (result === 'full') { say('That is the most saved cards there can be. Remove some under Saved first.'); return; }
+    if (result === 'saved' && c.tags?.length) updatePrefs({ tagPrefs: feedback(before, c, 'more') });
+    const btn = cardsEl.querySelector(`[data-id="${CSS.escape(c.id)}"] .card-save`);
+    if (btn) paintSave(btn, c);
+    const undo = () => {
+      toggleSave(c);
+      if (result === 'saved') updatePrefs({ tagPrefs: before.tagPrefs });
+      render();
+    };
+    if (was && pill === 'saved') leave(() => cardsEl.querySelector(`[data-id="${CSS.escape(c.id)}"]`));
+    else renderPills();
+    say(result === 'saved' ? 'Saved. Find it under Saved, here and on every browser you sign in on.' : 'Removed from saved.', undo);
   }
 
   function aim(a) {
@@ -359,6 +401,7 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
       placeMenu(button);
       return;
     }
+    item(isSaved(c.id) ? 'Remove from saved' : 'Save', () => toggle(c));
     item('More like this', () => moreLike(c));
     item('Less like this', () => lessLike(c));
     item('Not interested in this one', () => dismissCard(c, 'Set aside.'));

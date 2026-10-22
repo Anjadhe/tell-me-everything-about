@@ -3,13 +3,13 @@
 //
 // Everything saves as you type. A new prompt is kept once it has words.
 
-import * as store from './store.js?v=98030b1b32';
-import { ENGINES, engineById } from './engines.js?v=98030b1b32';
-import { describe, AUTO_FILLS, autoValues, fill, defaultLabel, highlight } from './template.js?v=98030b1b32';
-import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=98030b1b32';
-import { CATEGORIES } from './categories.js?v=98030b1b32';
-import { prefsFrom, tagState, cycleTag } from './interests.js?v=98030b1b32';
-import { forgetLocal } from './explore.js?v=98030b1b32';
+import * as store from './store.js?v=8f1b98feb3';
+import { ENGINES, engineById } from './engines.js?v=8f1b98feb3';
+import { describe, AUTO_FILLS, autoValues, fill, defaultLabel, highlight, parse } from './template.js?v=8f1b98feb3';
+import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=8f1b98feb3';
+import { CATEGORIES, categoryById, KINDS } from './categories.js?v=8f1b98feb3';
+import { prefsFrom, tagState, cycleTag } from './interests.js?v=8f1b98feb3';
+import { forgetLocal } from './explore.js?v=8f1b98feb3';
 
 const EXAMPLES = [
   { label: 'Compare', template: 'Compare {thing} with {other thing}: how they differ, where each one wins, and which to choose when' },
@@ -29,6 +29,7 @@ const newLink = $('#pp-new');
 const settingsLink = $('#pp-settings');
 const editorEl = $('#editor');
 const settingsEl = $('#settings-panel');
+const savedEl = $('#saved-panel');
 const headingEl = $('#ed-heading');
 const statusEl = $('#ed-status');
 const tplEl = $('#ed-template');
@@ -54,6 +55,7 @@ let statusTimer = null;
 function route() {
   const h = decodeURIComponent(location.hash.slice(1));
   if (h === 'settings') return showSettings();
+  if (h === 'saved') return showSaved();
   const list = store.prompts();
   if (h === 'new') {
     if (list.length >= store.MAX_PROMPTS) { history.replaceState(null, '', `#${list[0].id}`); return showEditor(list[0].id); }
@@ -72,7 +74,7 @@ window.addEventListener('pagehide', commit);
 
 function renderList() {
   const list = store.prompts();
-  const onSettings = !settingsEl.hidden;
+  const onSettings = !settingsEl.hidden || !savedEl.hidden;
   listEl.innerHTML = '';
   list.forEach((p, i) => {
     const li = document.createElement('li');
@@ -111,7 +113,10 @@ function renderList() {
   newLink.classList.toggle('disabled', full);
   newLink.setAttribute('aria-disabled', String(full));
   newLink.title = full ? 'Delete a prompt to make room for a new one' : '';
-  if (onSettings) settingsLink.setAttribute('aria-current', 'page'); else settingsLink.removeAttribute('aria-current');
+  if (!settingsEl.hidden) settingsLink.setAttribute('aria-current', 'page'); else settingsLink.removeAttribute('aria-current');
+  if (!savedEl.hidden) $('#pp-saved').setAttribute('aria-current', 'page'); else $('#pp-saved').removeAttribute('aria-current');
+  const n = store.savedCards().length;
+  $('#pp-saved-count').textContent = n ? `${n} saved` : 'None yet';
 }
 
 newLink.addEventListener('click', e => { if (newLink.classList.contains('disabled')) e.preventDefault(); });
@@ -145,6 +150,7 @@ function shift(id, dir) {
 function showEditor(id) {
   editorEl.hidden = false;
   settingsEl.hidden = true;
+  savedEl.hidden = true;
   currentId = id;
   const p = id ? store.promptById(id) : null;
   nameEl.value = p?.label || '';
@@ -435,11 +441,103 @@ $('#ed-delete-yes').addEventListener('click', () => {
   location.hash = next ? encodeURIComponent(next.id) : 'new';
 });
 
+// ---------- saved cards ----------
+
+function showSaved() {
+  commit();
+  editorEl.hidden = true;
+  settingsEl.hidden = true;
+  savedEl.hidden = false;
+  renderSaved();
+  renderList();
+}
+
+// The prompt the home page has selected, which a saved card asks with.
+function askingPrompt() {
+  const list = store.prompts();
+  return list.find(p => p.id === store.selectedId()) || list[0] || null;
+}
+
+function renderSaved() {
+  const cards = store.savedCards();
+  const list = $('#saved-list');
+  list.innerHTML = '';
+  $('#saved-foot').hidden = !cards.length;
+  if (!cards.length) {
+    const li = document.createElement('li');
+    li.className = 'saved-empty';
+    li.innerHTML = 'Nothing saved yet. Use the bookmark on any card under the box on the <a href="/">home page</a>.';
+    list.appendChild(li);
+    return;
+  }
+  const p = askingPrompt();
+  const tpl = p?.template || 'Tell me everything about {}';
+  const { blanks } = parse(tpl);
+  const engine = engineById(p?.engine || store.setting('defaultEngine', 'google-ai'));
+  for (const c of cards) {
+    const cat = categoryById(c.category);
+    const li = document.createElement('li');
+    li.className = 'saved-row';
+    li.style.setProperty('--h', cat.hue);
+    const text = document.createElement('div');
+    text.className = 'saved-text';
+    const kicker = document.createElement('span');
+    kicker.className = 'kicker';
+    kicker.textContent = cat.name + (KINDS[c.kind] ? ` · ${KINDS[c.kind]}` : '');
+    const title = document.createElement('span');
+    title.className = 'saved-title';
+    title.textContent = c.topic;
+    const hook = document.createElement('span');
+    hook.className = 'saved-hook';
+    hook.textContent = c.hook;
+    text.append(kicker, title, hook);
+    const actions = document.createElement('div');
+    actions.className = 'saved-actions';
+    if (blanks.length === 1) {
+      const ask = document.createElement('a');
+      ask.className = 'pill';
+      ask.href = engine.url(encodeURIComponent(fill(tpl, { [blanks[0].id]: c.topic })));
+      ask.target = '_blank';
+      ask.rel = 'noopener';
+      ask.textContent = `${p?.label || defaultLabel(tpl)} ↗`;
+      ask.title = `Ask with "${p?.label || defaultLabel(tpl)}" in ${engine.name}`;
+      actions.appendChild(ask);
+    }
+    if (c.angle) {
+      const q = document.createElement('a');
+      q.className = 'quiet';
+      q.href = engine.url(encodeURIComponent(c.angle));
+      q.target = '_blank';
+      q.rel = 'noopener';
+      q.textContent = 'Its question ↗';
+      q.title = c.angle;
+      actions.appendChild(q);
+    }
+    const rm = document.createElement('button');
+    rm.type = 'button';
+    rm.className = 'icon';
+    rm.setAttribute('aria-label', `Remove ${c.topic} from saved`);
+    rm.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+    rm.addEventListener('click', () => { store.unsaveCard(c.id); renderSaved(); renderList(); });
+    actions.appendChild(rm);
+    li.append(text, actions);
+    list.appendChild(li);
+  }
+}
+
+$('#saved-clear').addEventListener('click', () => {
+  if (!confirm('Remove all saved cards? This removes them everywhere you are signed in.')) return;
+  store.unsaveAll();
+  renderSaved();
+  renderList();
+});
+
 // ---------- settings ----------
 
 function showSettings() {
   commit();
   editorEl.hidden = true;
+  savedEl.hidden = true;
   settingsEl.hidden = false;
   renderSettings();
   renderList();
@@ -648,6 +746,7 @@ store.subscribe(what => {
     // someone is typing in it; otherwise show the newer copy.
     const typing = document.activeElement === tplEl || document.activeElement === nameEl;
     if (!settingsEl.hidden) renderSettings();
+    else if (!savedEl.hidden) renderSaved();
     else if (currentId && !store.promptById(currentId)) route();
     else if (currentId && !typing) showEditor(currentId);
     renderList();

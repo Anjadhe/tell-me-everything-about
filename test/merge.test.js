@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { merge, emptyState, sameState } from '../public/merge.js';
+import { merge, emptyState, sameState, normalize } from '../public/merge.js';
 
 const t0 = '2026-09-10T10:00:00.000Z';
 const t1 = '2026-09-10T11:00:00.000Z';
@@ -45,4 +45,36 @@ test('garbage in is tolerated', () => {
   const m = merge(null, { prompts: [null, { nope: 1 }, p('a', 'A', t0)] });
   assert.equal(m.prompts.length, 1);
   assert.ok(sameState(merge(undefined, undefined), emptyState()));
+});
+
+const s = (id, updatedAt, savedAt = updatedAt) => ({ id, card: { id, topic: id }, savedAt, updatedAt });
+
+test('saved cards from two browsers are both kept, newest saved first', () => {
+  const m = merge({ saved: [s('a', t0)] }, { saved: [s('b', t1)] });
+  assert.deepEqual(m.saved.map(x => x.id), ['b', 'a']);
+});
+
+test('removing a saved card in one browser removes it everywhere', () => {
+  const m = merge({ saved: [s('a', t0)] }, { tombstones: { 'saved:a': t1 } });
+  assert.deepEqual(m.saved, []);
+  assert.equal(m.tombstones['saved:a'], t1);
+});
+
+test('saving again after a removal wins over the removal', () => {
+  const m = merge({ saved: [s('a', t2)] }, { tombstones: { 'saved:a': t1 } });
+  assert.equal(m.saved.length, 1);
+  assert.equal(m.tombstones['saved:a'], undefined);
+});
+
+test('a saved card and a prompt with the same id never touch', () => {
+  const m = merge({ prompts: [p('x', 'X', t0)], saved: [s('x', t0)] }, { tombstones: { x: t1 } });
+  assert.equal(m.prompts.length, 0);
+  assert.equal(m.saved.length, 1);
+});
+
+test('a state from before saved cards merges cleanly', () => {
+  const m = merge({ prompts: [p('a', 'A', t0)] }, { saved: [s('b', t0)] });
+  assert.equal(m.prompts.length, 1);
+  assert.equal(m.saved.length, 1);
+  assert.deepEqual(normalize({ prompts: [] }).saved, []);
 });

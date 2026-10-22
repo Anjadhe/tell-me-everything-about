@@ -7,14 +7,14 @@
 <meta name="description" content="Write the prompts your home page finishes for you, with blanks to fill in and details that fill themselves in.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/app.css?v=98030b1b32">
-<link rel="modulepreload" href="/prompts.js?v=98030b1b32">
-<link rel="modulepreload" href="/store.js?v=98030b1b32">
-<link rel="modulepreload" href="/merge.js?v=98030b1b32">
-<link rel="modulepreload" href="/engines.js?v=98030b1b32">
-<link rel="modulepreload" href="/template.js?v=98030b1b32">
-<link rel="modulepreload" href="/sentence.js?v=98030b1b32">
-<link rel="modulepreload" href="/categories.js?v=98030b1b32">
+<link rel="stylesheet" href="/app.css?v=8f1b98feb3">
+<link rel="modulepreload" href="/prompts.js?v=8f1b98feb3">
+<link rel="modulepreload" href="/store.js?v=8f1b98feb3">
+<link rel="modulepreload" href="/merge.js?v=8f1b98feb3">
+<link rel="modulepreload" href="/engines.js?v=8f1b98feb3">
+<link rel="modulepreload" href="/template.js?v=8f1b98feb3">
+<link rel="modulepreload" href="/sentence.js?v=8f1b98feb3">
+<link rel="modulepreload" href="/categories.js?v=8f1b98feb3">
 <script>try{var t=localStorage.getItem('tmea:theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body class="page-prompts">
@@ -38,6 +38,7 @@
     <ol class="pp-list" id="pp-list"></ol>
     <a class="pill pp-new" id="pp-new" href="#new"><span aria-hidden="true">+</span> New prompt</a>
     <div class="pp-more">
+      <a class="pp-item pp-settings" id="pp-saved" href="#saved"><span class="n">Saved cards</span><span class="s" id="pp-saved-count"></span></a>
       <a class="pp-item pp-settings" id="pp-settings" href="#settings"><span class="n">Settings and account</span></a>
     </div>
   </aside>
@@ -96,6 +97,16 @@
         <button type="button" class="pill danger" id="ed-delete-yes">Delete</button>
         <button type="button" class="quiet" id="ed-delete-no">Keep it</button>
       </span>
+    </footer>
+  </section>
+
+  <!-- Saved Explore cards -->
+  <section class="pp-main" id="saved-panel" hidden aria-labelledby="saved-heading">
+    <header class="ed-head"><h2 id="saved-heading">Saved cards</h2></header>
+    <p class="setting-note saved-intro">Cards you saved from Explore. Each one asks with the prompt selected on the home page. They are kept like your prompts: in this browser, and with your account when you are signed in.</p>
+    <ol class="saved-list" id="saved-list"></ol>
+    <footer class="ed-foot" id="saved-foot" hidden>
+      <button type="button" class="quiet danger" id="saved-clear">Remove all saved cards</button>
     </footer>
   </section>
 
@@ -175,6 +186,6 @@
   <span class="foot-links"><a href="/about">About</a><a href="/">Home</a></span>
 </footer>
 
-<script type="module" src="/prompts.js?v=98030b1b32"></script>
+<script type="module" src="/prompts.js?v=8f1b98feb3"></script>
 </body>
 </html>

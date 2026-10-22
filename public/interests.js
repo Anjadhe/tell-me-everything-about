@@ -13,7 +13,7 @@
 //   mix        { timely: 0..1, surprising: 0..1 }   0.5 is no preference
 //   onboarded  true once the first-run picker is done or skipped
 
-import { CATEGORY_IDS, TAG_IDS, tagById } from './categories.js?v=98030b1b32';
+import { CATEGORY_IDS, TAG_IDS, tagById } from './categories.js?v=8f1b98feb3';
 
 const TAG_MIN = -3, TAG_MAX = 3;
 
