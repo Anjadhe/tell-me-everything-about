@@ -4,9 +4,12 @@
 // list can follow the user to another browser. It knows an email address, a
 // session and one small JSON blob per user, and nothing else: no topics are
 // ever sent here (launching happens in the browser, straight to the engine).
+// It also writes the day's Explore list once each morning and serves it to
+// everyone alike (src/explore.js).
 
 import { merge, normalize, sameState } from '../public/merge.js';
-import { ENGINE_IDS, tagRows, lastDays } from './usage.js';
+import { ENGINE_IDS, LAUNCH_FROM, tagRows, lastDays } from './usage.js';
+import { generate, evergreenFeed } from './explore.js';
 
 const SESSION_COOKIE = 'tmea_session';
 const SESSION_DAYS = 90;
@@ -14,6 +17,8 @@ const LINK_MINUTES = 15;
 const LINKS_PER_EMAIL_PER_HOUR = 5;
 const LINKS_PER_IP_PER_HOUR = 20;
 const MAX_STATE_BYTES = 32 * 1024;
+const EXPLORE_KEEP_DAYS = 30;
+const EXPLORE_EDGE_SECONDS = 900;
 
 export default {
   async fetch(request, env, ctx) {
@@ -27,6 +32,11 @@ export default {
       console.error(JSON.stringify({ level: 'error', path: url.pathname, message: err?.message }));
       return json({ error: 'Something went wrong on our side. Try again in a moment.' }, 500);
     }
+  },
+
+  // Daily, from the cron in wrangler.jsonc.
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(refreshExplore(env).catch(() => {}));
   },
 };
 
@@ -47,6 +57,8 @@ async function route(request, env, ctx, url) {
   if (pathname === '/api/account' && method === 'DELETE') return deleteAccount(request, env);
   if (pathname === '/api/launch' && method === 'POST') return countLaunch(request, env, ctx);
   if (pathname === '/api/admin/usage' && method === 'GET') return adminUsage(request, env);
+  if (pathname === '/api/explore' && method === 'GET') return getExplore(request, env, ctx);
+  if (pathname === '/api/admin/explore' && method === 'POST') return adminExplore(request, env);
   return json({ error: 'Not found.' }, 404);
 }
 
@@ -189,8 +201,9 @@ async function putState(request, env) {
 async function countLaunch(request, env, ctx) {
   const body = await readJson(request);
   const engine = ENGINE_IDS.includes(body?.engine) ? body.engine : 'other';
+  const from = LAUNCH_FROM.includes(body?.from) ? body.from : 'typed';
   const day = new Date().toISOString().slice(0, 10);
-  ctx.waitUntil(bump(env, day, 'launch', engine));
+  ctx.waitUntil(Promise.all([bump(env, day, 'launch', engine), bump(env, day, 'from', from)]));
   return new Response(null, { status: 204 });
 }
 
@@ -207,10 +220,12 @@ async function adminUsage(request, env) {
 
   const days = lastDays(14);
   const since = days[0];
-  const [accounts, signins, launches] = await env.DB.batch([
+  const [accounts, signins, launches, froms, explore] = await env.DB.batch([
     env.DB.prepare('SELECT (SELECT COUNT(*) FROM users) AS users, (SELECT COUNT(*) FROM sessions WHERE expires_at > ?) AS sessions').bind(new Date().toISOString()),
     env.DB.prepare("SELECT substr(used_at, 1, 10) AS day, COUNT(*) AS n FROM magic_links WHERE used_at IS NOT NULL AND used_at >= ? GROUP BY day").bind(since),
     env.DB.prepare("SELECT day, key, n FROM counters WHERE kind = 'launch' AND day >= ?").bind(since),
+    env.DB.prepare("SELECT key, SUM(n) AS n FROM counters WHERE kind = 'from' AND day >= ? GROUP BY key").bind(since),
+    env.DB.prepare('SELECT day, created_at, data FROM explore ORDER BY day DESC LIMIT 1'),
   ]);
 
   const launchByDay = Object.fromEntries(days.map(d => [d, 0]));
@@ -222,7 +237,14 @@ async function adminUsage(request, env) {
   const signinByDay = Object.fromEntries(days.map(d => [d, 0]));
   for (const r of signins.results) signinByDay[r.day] = r.n;
 
+  const launchFrom = Object.fromEntries(froms.results.map(r => [r.key, r.n]));
+  const latest = explore.results[0];
+  const exploreInfo = latest
+    ? { day: latest.day, createdAt: latest.created_at, ...pick(JSON.parse(latest.data)) }
+    : null;
+
   const traffic = await edgeTraffic(env, days);
+  function pick(feed) { return { cards: feed.cards.length, model: feed.model || null }; }
 
   return json({
     generatedAt: new Date().toISOString(),
@@ -231,6 +253,8 @@ async function adminUsage(request, env) {
     signinByDay,
     launchByDay,
     launchByEngine,
+    launchFrom,
+    explore: exploreInfo,
     traffic,
   });
 }
@@ -263,6 +287,71 @@ async function edgeTraffic(env, days) {
   }));
   for (const [day, v] of results) out[day] = v;
   return { available: true, byDay: out };
+}
+
+// ---------- explore ----------
+
+// The newest stored list, or the evergreen one before the first run. Every
+// visitor gets the same bytes, so it is cached at the edge for a few minutes
+// and in the browser briefly; no cookie is read and none is needed.
+async function getExplore(request, env, ctx) {
+  const cache = caches.default;
+  const key = new Request(new URL('/api/explore', request.url).toString());
+  const hit = await cache.match(key);
+  if (hit) return hit;
+
+  const row = await env.DB.prepare('SELECT data FROM explore ORDER BY day DESC LIMIT 1').first();
+  const body = row ? row.data : JSON.stringify(evergreenFeed(today()));
+  const res = new Response(body, {
+    headers: {
+      'content-type': 'application/json',
+      'cache-control': `public, max-age=${EXPLORE_EDGE_SECONDS}, stale-while-revalidate=86400`,
+    },
+  });
+  ctx.waitUntil(cache.put(key, res.clone()));
+  return res;
+}
+
+// Writes today's list. With no ANTHROPIC_API_KEY there is nothing to write
+// and the page keeps showing the evergreen list. On failure the previous day
+// stays up; a stale list is better than an empty one.
+async function refreshExplore(env) {
+  if (!env.ANTHROPIC_API_KEY) return { ok: false, reason: 'ANTHROPIC_API_KEY is not set.' };
+  const day = today();
+  try {
+    const feed = await generate(env, day);
+    const cutoff = new Date(Date.now() - EXPLORE_KEEP_DAYS * 86400_000).toISOString().slice(0, 10);
+    await env.DB.batch([
+      env.DB.prepare('INSERT INTO explore (day, data, created_at) VALUES (?, ?, ?) ON CONFLICT(day) DO UPDATE SET data = excluded.data, created_at = excluded.created_at')
+        .bind(day, JSON.stringify(feed), new Date().toISOString()),
+      env.DB.prepare('DELETE FROM explore WHERE day < ?').bind(cutoff),
+    ]);
+    console.log(JSON.stringify({ level: 'info', event: 'explore_written', day, model: feed.model, cards: feed.cards.length }));
+    return { ok: true, day, model: feed.model, cards: feed.cards.length };
+  } catch (err) {
+    console.error(JSON.stringify({ level: 'error', event: 'explore_failed', day, message: err?.message }));
+    throw err;
+  }
+}
+
+// Run the daily job now, for the first deploy or after changing the prompt.
+async function adminExplore(request, env) {
+  if (!env.ADMIN_KEY) return json({ error: 'ADMIN_KEY is not set on the Worker.' }, 503);
+  const given = request.headers.get('x-admin-key') || '';
+  if (!(await timingSafeEqualString(given, env.ADMIN_KEY))) return json({ error: 'Wrong key.' }, 401);
+  try {
+    const result = await refreshExplore(env);
+    // The edge cache is per location; this clears the one serving the admin,
+    // and the rest expire within EXPLORE_EDGE_SECONDS.
+    if (result.ok) await caches.default.delete(new Request(new URL('/api/explore', request.url).toString()));
+    return json(result, result.ok ? 200 : 503);
+  } catch (err) {
+    return json({ ok: false, reason: err?.message || 'failed' }, 502);
+  }
+}
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 async function timingSafeEqualString(a, b) {

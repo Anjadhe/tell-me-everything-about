@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompts · Tell me everything about</title>
+<meta name="description" content="Write the prompts your home page finishes for you, with blanks to fill in and details that fill themselves in.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/app.css?v=c4d4666288">
+<link rel="modulepreload" href="/prompts.js?v=c4d4666288">
+<link rel="modulepreload" href="/store.js?v=c4d4666288">
+<link rel="modulepreload" href="/merge.js?v=c4d4666288">
+<link rel="modulepreload" href="/engines.js?v=c4d4666288">
+<link rel="modulepreload" href="/template.js?v=c4d4666288">
+<link rel="modulepreload" href="/sentence.js?v=c4d4666288">
+<link rel="modulepreload" href="/categories.js?v=c4d4666288">
+<script>try{var t=localStorage.getItem('tmea:theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
+</head>
+<body class="page-prompts">
+
+<header class="top">
+  <a class="brand" href="/" aria-label="Tell me everything about">
+    <svg width="14" height="14" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="currentColor"/><path d="M8 22.5V9.5h2.2v11.2H17v1.8z" fill="var(--ground)"/><circle cx="22.5" cy="21" r="2" fill="var(--accent)"/></svg>
+    <span>tell me everything about</span>
+  </a>
+  <nav class="top-actions">
+    <span id="sync-dot" class="sync-dot" hidden title="Synced"></span>
+    <a class="pill solid" href="/" id="done">Done</a>
+  </nav>
+</header>
+
+<main class="pp">
+  <aside class="pp-side">
+    <h1 class="pp-title">Prompts</h1>
+    <p class="pp-count" id="pp-count"></p>
+    <ol class="pp-list" id="pp-list"></ol>
+    <a class="pill pp-new" id="pp-new" href="#new"><span aria-hidden="true">+</span> New prompt</a>
+    <div class="pp-more">
+      <a class="pp-item pp-settings" id="pp-settings" href="#settings"><span class="n">Settings and account</span></a>
+    </div>
+  </aside>
+
+  <!-- One prompt -->
+  <section class="pp-main" id="editor" hidden aria-labelledby="ed-heading">
+    <header class="ed-head">
+      <h2 id="ed-heading">New prompt</h2>
+      <span id="ed-status" class="ed-status" aria-live="polite"></span>
+    </header>
+
+    <div class="ed-field">
+      <label class="ed-label" for="ed-template">Prompt</label>
+      <div class="tpl">
+        <div class="tpl-mirror" id="ed-mirror" aria-hidden="true"></div>
+        <textarea id="ed-template" rows="1" maxlength="400" spellcheck="true" placeholder="Compare {thing} with {other thing}"></textarea>
+      </div>
+      <div class="tpl-tools" id="ed-tools" role="toolbar" aria-label="Insert a placeholder">
+        <button type="button" class="tool tool-blank" data-insert="blank" title="A box you fill in on the home page">+ Blank</button>
+        <span class="tool-lead">Fills itself in:</span>
+      </div>
+      <div class="ed-help" id="ed-help" aria-live="polite"></div>
+    </div>
+
+    <div class="ed-examples" id="ed-examples" hidden>
+      <span class="ed-label">Or start from an example</span>
+      <div class="examples" id="ed-example-list"></div>
+    </div>
+
+    <div class="ed-field">
+      <label class="ed-label" for="ed-name">Name on the tab</label>
+      <input id="ed-name" class="ed-input" type="text" maxlength="40" autocomplete="off">
+    </div>
+
+    <div class="ed-field">
+      <span class="ed-label" id="ed-engine-label">Opens in</span>
+      <div class="engine-pick" id="ed-engines" role="radiogroup" aria-labelledby="ed-engine-label"></div>
+    </div>
+
+    <section class="ed-preview" aria-labelledby="ed-preview-label">
+      <div class="ed-preview-head">
+        <span class="ed-label" id="ed-preview-label">Preview</span>
+        <span class="ed-preview-sub">How it reads on the home page. Type in it to try.</span>
+      </div>
+      <div class="sentence preview-sentence" id="ed-sentence" role="group" aria-label="Preview"><span class="keep" hidden></span></div>
+      <div class="ed-preview-foot">
+        <p class="ed-query" id="ed-query"></p>
+        <button type="button" class="pill solid" id="ed-try">Try it in <span id="ed-try-engine"></span> <span aria-hidden="true">↗</span></button>
+      </div>
+    </section>
+
+    <footer class="ed-foot" id="ed-foot">
+      <button type="button" class="quiet danger" id="ed-delete">Delete this prompt</button>
+      <span class="ed-confirm" id="ed-confirm" hidden>
+        <span>Delete it everywhere you are signed in?</span>
+        <button type="button" class="pill danger" id="ed-delete-yes">Delete</button>
+        <button type="button" class="quiet" id="ed-delete-no">Keep it</button>
+      </span>
+    </footer>
+  </section>
+
+  <!-- Settings and account -->
+  <section class="pp-main" id="settings" hidden aria-labelledby="settings-heading">
+    <header class="ed-head"><h2 id="settings-heading">Settings</h2></header>
+
+    <section class="set-group">
+      <h3 class="ed-label">Opening</h3>
+      <div class="setting">
+        <label for="s-engine">New prompts open in</label>
+        <select id="s-engine"></select>
+      </div>
+      <div class="setting">
+        <label for="s-newtab">Open results in a new tab</label>
+        <input type="checkbox" id="s-newtab" class="switch">
+      </div>
+      <div class="setting">
+        <label for="s-theme">Appearance</label>
+        <select id="s-theme">
+          <option value="system">Match system</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </div>
+    </section>
+
+    <section class="set-group">
+      <h3 class="ed-label">Explore</h3>
+      <div class="setting">
+        <label for="s-explore">Show topics to explore under the box</label>
+        <input type="checkbox" id="s-explore" class="switch">
+      </div>
+      <div class="setting-block">
+        <span class="setting-label" id="s-interests-label">Topics you like</span>
+        <div id="s-interests" class="chips" role="group" aria-labelledby="s-interests-label"></div>
+        <p class="setting-note">Pick none to see a bit of everything.</p>
+      </div>
+      <div class="setting">
+        <label for="s-recent">Remember my recent topics</label>
+        <input type="checkbox" id="s-recent" class="switch">
+      </div>
+      <p class="setting-note">Kept in this browser only. Never synced and never sent anywhere. Turning it off forgets them.</p>
+    </section>
+
+    <section class="set-group">
+      <h3 class="ed-label">Account</h3>
+      <div id="account-panel"></div>
+    </section>
+  </section>
+</main>
+
+<footer class="foot">
+  <span id="foot-note">Saved in this browser.</span>
+  <span class="foot-links"><a href="/about">About</a><a href="/">Home</a></span>
+</footer>
+
+<script type="module" src="/prompts.js?v=c4d4666288"></script>
+</body>
+</html>

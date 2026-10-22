@@ -8,6 +8,10 @@
 
 export const ENGINE_IDS = ['google-ai', 'google', 'perplexity', 'chatgpt', 'claude', 'grok', 'duckduckgo'];
 
+// How a launch started: a typed topic, an Explore card, a card's question, or
+// a recent topic. Counted the same anonymous way as the engine.
+export const LAUNCH_FROM = ['typed', 'card', 'angle', 'recent'];
+
 const BOT_RX = /bot|crawl|spider|slurp|fetch|curl\/|wget|python|go-http|okhttp|java\/|libwww|httpclient|headless|lighthouse|pingdom|uptime|monitor|scan|check|preview|unfurl|facebookexternalhit|twitterbot|discordbot|telegrambot|whatsapp|slack|linkedin|embedly|quora|pinterest|nexus 5 build\/mra58n|phantom|selenium|playwright|puppeteer|node-fetch|axios|postman|insomnia|^$/i;
 
 const BROWSER_RX = /(chrome|crios|firefox|fxios|safari|edg|opr|samsungbrowser|vivaldi|brave)\//i;
@@ -32,7 +36,7 @@ export function browserFamily(ua) {
   return 'Other browser';
 }
 
-export const PAGE_PATHS = new Set(['/', '/about', '/admin']);
+export const PAGE_PATHS = new Set(['/', '/about', '/admin', '/prompts']);
 
 export function requestKind(path) {
   const p = String(path || '');

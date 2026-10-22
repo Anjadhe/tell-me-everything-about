@@ -7,3 +7,7 @@ DEV_LINKS=1
 ADMIN_KEY=dev-admin-key
 # Edge traffic on the dashboard: an API token with Analytics:Read on the zone.
 # CF_ANALYTICS_TOKEN=...
+# Explore: without a key the page shows the evergreen list. With one,
+# "Write today's list now" on /admin (or the cron) writes today's list.
+# ANTHROPIC_API_KEY=sk-ant-...
+# EXPLORE_MODEL=claude-haiku-5-5      # optional; wrangler.jsonc sets the default

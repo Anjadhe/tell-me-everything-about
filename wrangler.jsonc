@@ -32,6 +32,10 @@
 	],
 	// The page answers on tmea.space; Cloudflare owns the DNS record and the
 	// certificate for it. workers.dev stays on as a fallback address.
+	"triggers": {
+		// Explore: the day's list is written at 05:10 UTC (src/explore.js).
+		"crons": ["10 5 * * *"]
+	},
 	"workers_dev": true,
 	"routes": [
 		{ "pattern": "tmea.space", "custom_domain": true }
@@ -44,6 +48,8 @@
 		"APP_NAME": "Tell me everything about",
 		"MAIL_FROM": "hello@tmea.space",
 		"DEV_LINKS": "0",
-		"CF_ZONE_TAG": "3992b9a02e8da1c5402f57d9e8f98600"
+		"CF_ZONE_TAG": "3992b9a02e8da1c5402f57d9e8f98600",
+		// The Claude model that writes the daily Explore list. Change and redeploy.
+		"EXPLORE_MODEL": "claude-sonnet-5-5"
 	}
 }

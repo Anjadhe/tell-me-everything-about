@@ -7,7 +7,7 @@
 <meta name="robots" content="noindex">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/app.css?v=908797b10a">
+<link rel="stylesheet" href="/app.css?v=c4d4666288">
 <script>try{var t=localStorage.getItem('tmea:theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
 <style>
   :root { --s-loads: #2f6bff; --s-launch: #e07a1f; }
@@ -137,6 +137,17 @@
       <div>
         <h2>Launches by engine</h2>
         <div class="chart"><div class="rows" id="engines"></div></div>
+      </div>
+      <div>
+        <h2>Launches by source</h2>
+        <div class="chart"><div class="rows" id="froms"></div></div>
+      </div>
+      <div>
+        <h2>Explore</h2>
+        <div class="chart">
+          <p class="note" id="explore-status"></p>
+          <button type="button" id="explore-run" class="quiet">Write today's list now</button>
+        </div>
       </div>
     </div>
 

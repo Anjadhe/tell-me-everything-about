@@ -7,9 +7,15 @@
 <meta name="description" content="A home page that finishes your prompt for you. Type a topic, press Enter, and it opens in Google AI Mode, Perplexity, ChatGPT or wherever you like.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/app.css?v=908797b10a">
-<link rel="modulepreload" href="/app.js?v=908797b10a">
-<link rel="modulepreload" href="/merge.js?v=908797b10a">
+<link rel="stylesheet" href="/app.css?v=c4d4666288">
+<link rel="modulepreload" href="/app.js?v=c4d4666288">
+<link rel="modulepreload" href="/merge.js?v=c4d4666288">
+<link rel="modulepreload" href="/store.js?v=c4d4666288">
+<link rel="modulepreload" href="/engines.js?v=c4d4666288">
+<link rel="modulepreload" href="/template.js?v=c4d4666288">
+<link rel="modulepreload" href="/sentence.js?v=c4d4666288">
+<link rel="modulepreload" href="/explore.js?v=c4d4666288">
+<link rel="modulepreload" href="/categories.js?v=c4d4666288">
 <script>try{var t=localStorage.getItem('tmea:theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body>
@@ -22,7 +28,7 @@
   <nav class="top-actions">
     <span id="sync-dot" class="sync-dot" hidden title="Synced"></span>
     <button type="button" id="account-btn" class="quiet">Sign in</button>
-    <button type="button" id="manage-btn" class="quiet">Prompts</button>
+    <a id="manage-btn" class="quiet" href="/prompts">Prompts</a>
   </nav>
 </header>
 
@@ -30,68 +36,37 @@
   <div id="prompt-tabs" class="tabs" role="tablist" aria-label="Prompts"></div>
 
   <form id="ask" class="ask" autocomplete="off">
-    <label class="sentence" for="topic">
-      <span id="lead" class="lead">Tell me everything about </span><span class="slot" id="slot" data-value=""><input id="topic" name="topic" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" aria-label="What do you want to know about?"><span class="ghost" aria-hidden="true">something</span></span><span id="tail" class="tail"></span>
-    </label>
+    <div class="sentence" id="sentence" role="group" aria-label="Your prompt"><span id="whole" class="whole keep" aria-hidden="true"></span></div>
     <div class="meta">
+      <span class="meta-left">
       <button type="button" id="engine-btn" class="engine" aria-haspopup="menu" aria-expanded="false">
         <span class="engine-lead">opens in</span> <span id="engine-name"></span>
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
       </button>
-      <span class="hint" id="hint"><kbd>↵</kbd> open <span class="sep"></span> <kbd>⌘</kbd><kbd>↵</kbd> new tab <span class="sep"></span> <kbd>↑</kbd><kbd>↓</kbd> prompt</span>
+      <a id="edit-prompt" class="edit-link" href="/prompts">Edit prompt</a>
+      </span>
+      <span class="hint" id="hint"><span id="hint-take" class="hint-take" hidden><kbd>⇥</kbd> take suggestion <span class="sep"></span></span><kbd>↵</kbd> open <span class="sep"></span> <kbd>⌘</kbd><kbd>↵</kbd> new tab <span class="sep"></span> <kbd>↑</kbd><kbd>↓</kbd> prompt</span>
     </div>
   </form>
 
   <div id="engine-menu" class="menu" role="menu" hidden></div>
 </main>
 
+<section id="explore" class="explore" aria-labelledby="explore-title" hidden>
+  <header class="explore-head">
+    <h2 id="explore-title">Explore</h2>
+    <span class="explore-date"></span>
+    <button type="button" class="quiet explore-more" hidden>More <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button>
+  </header>
+  <div class="recent" hidden></div>
+  <div class="cards"></div>
+  <p class="explore-foot"></p>
+</section>
+
 <footer class="foot">
   <span id="foot-note">Saved in this browser.</span>
   <span class="foot-links"><a href="/about">About</a><a href="#" id="homepage-help">Make this your home page</a></span>
 </footer>
-
-<!-- Manage prompts -->
-<dialog id="manage" class="sheet" aria-labelledby="manage-title">
-  <form method="dialog" class="sheet-body">
-    <header class="sheet-head">
-      <h2 id="manage-title">Prompts</h2>
-      <button type="submit" class="quiet" aria-label="Close">Done</button>
-    </header>
-
-    <p class="sheet-intro">Up to six. Write <code>{}</code> where the topic goes, or leave it out to add the topic at the end.</p>
-
-    <ol id="prompt-list" class="prompt-list"></ol>
-    <div class="list-foot">
-      <button type="button" id="add-prompt" class="pill">Add a prompt</button>
-      <span id="prompt-count" class="count"></span>
-    </div>
-
-    <section class="sheet-section">
-      <h3>Settings</h3>
-      <div class="setting">
-        <label for="s-engine">New prompts open in</label>
-        <select id="s-engine"></select>
-      </div>
-      <div class="setting">
-        <label for="s-newtab">Open results in a new tab</label>
-        <input type="checkbox" id="s-newtab" class="switch">
-      </div>
-      <div class="setting">
-        <label for="s-theme">Appearance</label>
-        <select id="s-theme">
-          <option value="system">Match system</option>
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
-        </select>
-      </div>
-    </section>
-
-    <section class="sheet-section">
-      <h3>Account</h3>
-      <div id="account-panel"></div>
-    </section>
-  </form>
-</dialog>
 
 <!-- Sign in -->
 <dialog id="signin" class="modal" aria-labelledby="signin-title">
@@ -127,21 +102,6 @@
   </form>
 </dialog>
 
-<template id="prompt-row">
-  <li class="prompt-row">
-    <div class="row-grip">
-      <button type="button" class="icon up" aria-label="Move up"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg></button>
-      <button type="button" class="icon down" aria-label="Move down"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
-    </div>
-    <div class="row-fields">
-      <input class="f-label" type="text" placeholder="Short name" maxlength="40" aria-label="Name">
-      <input class="f-template" type="text" placeholder="Tell me everything about {}" maxlength="400" aria-label="Prompt">
-      <select class="f-engine" aria-label="Opens in"></select>
-    </div>
-    <button type="button" class="icon delete" aria-label="Delete prompt"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
-  </li>
-</template>
-
-<script type="module" src="/app.js?v=908797b10a"></script>
+<script type="module" src="/app.js?v=c4d4666288"></script>
 </body>
 </html>

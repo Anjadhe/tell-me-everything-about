@@ -149,6 +149,12 @@ function render() {
   bars($('#browsers'), sumBy(rows, 'browser'));
   const engines = Object.entries(data.launchByEngine).sort((a, b) => b[1] - a[1]);
   bars($('#engines'), engines, k => ENGINE_NAMES[k] || k);
+  const FROM_NAMES = { typed: 'Typed in the box', card: 'Explore card', angle: 'Explore question', recent: 'Recent topic' };
+  bars($('#froms'), Object.entries(data.launchFrom || {}).sort((a, b) => b[1] - a[1]), k => FROM_NAMES[k] || k);
+  const ex = data.explore;
+  $('#explore-status').textContent = ex
+    ? `Latest list: ${ex.day}, ${ex.cards} cards${ex.model ? ` by ${ex.model}` : ''}, written ${new Date(ex.createdAt).toLocaleString()}.`
+    : 'No daily list yet; the page shows the evergreen one.';
 
   const uas = sumBy(rows, 'ua').slice(0, 25);
   const tagOf = ua => { const r = rows.find(x => x.ua === ua); return r ? `<span class="tag">${r.who === 'person' ? 'person' : 'not a person'}</span><span class="tag">${esc(r.browser)}</span><span class="tag">${esc(r.device)}</span>` : ''; };
@@ -168,5 +174,20 @@ for (const id of FILTER_IDS) $(`#f-${id}`).addEventListener('change', () => { sa
 $('#f-reset').addEventListener('click', resetFilters);
 $('#gate-form').addEventListener('submit', e => { e.preventDefault(); setKey($('#key').value.trim()); $('#key').value = ''; load(); });
 $('#refresh').addEventListener('click', load);
+$('#explore-run').addEventListener('click', async e => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  $('#explore-status').textContent = 'Asking Claude for today\'s list. This takes a minute or so…';
+  try {
+    const res = await fetch('/api/admin/explore', { method: 'POST', headers: { 'x-admin-key': getKey() } });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok || !out.ok) throw new Error(out.reason || out.error || `Failed (${res.status}).`);
+    await load();
+  } catch (err) {
+    $('#explore-status').textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
 $('#lock').addEventListener('click', () => { setKey(''); showGate(); });
 load();

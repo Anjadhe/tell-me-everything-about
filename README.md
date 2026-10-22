@@ -6,6 +6,13 @@ A home page that finishes your prompt for you. Pick a prompt, type a topic,
 press Enter, and it opens in Google AI Mode, Perplexity, ChatGPT, Claude or
 wherever you like. Up to six prompts, each with its own destination.
 
+Under the box, **Explore** shows the day's topics as cards, the way Firefox's
+new tab once showed Pocket stories. A card is only a topic: it opens with
+whichever prompt is selected, in that prompt's engine. Each morning a cron in
+the Worker reads Wikipedia's featured feed and the Hacker News front page and
+asks Claude to pick the topics and write the cards; everyone gets the same
+list.
+
 The page is static and loads from the edge cache with no framework and no web
 fonts. Everything lives in the browser's localStorage. Signing in (a link by
 email, no password) adds a server copy so the same prompts appear in every
@@ -16,15 +23,23 @@ plain redirect from the browser to the engine.
 
 | Path | What |
 |------|------|
-| `public/index.html`, `app.css`, `app.js` | The whole page. Vanilla, one module script. |
+| `public/index.html`, `app.css`, `app.js` | The home page: the sentence, launching, Explore. Vanilla modules, no build. |
+| `public/prompts.html`, `prompts.js` | `/prompts`: write and order prompts with a live preview; settings and account. |
+| `public/template.js` | What a prompt means: `{}` and named blanks like `{city}` (up to four), and `{today}`, `{month}`, `{year}`, `{language}`, which fill themselves in. |
+| `public/sentence.js` | Draws a prompt as the sentence with a box per blank; shared by the home page and the preview. |
+| `public/store.js` | State, settings, sync and the account, shared by both pages. Tabs stay in step through the storage event. |
+| `public/engines.js` | The destinations. |
 | `public/merge.js` | The one merge (per prompt, newest wins, tombstones). Runs in the page and the Worker. |
+| `public/explore.js` | Explore cards: links aimed through the selected prompt, hover previews, and the generated covers. |
+| `public/categories.js` | Explore's categories and their colours. Shared by the page and the Worker. |
+| `src/explore.js` | The daily job: sources, the prompt and schema for Claude, cleaning, and the evergreen fallback list. |
 | `public/_headers` | Cache headers: HTML briefly, versioned assets for a year. |
 | `extension/` | Browser extension that opens the page in every new tab. See [New tabs](#new-tabs). |
 | `scripts/extension-icons.js` | Renders `favicon.svg` to the PNG sizes the extension needs. |
 | `scripts/stamp.js` | Stamps `?v=<content hash>` on asset URLs before every deploy so a page never pairs with a stale stylesheet. |
 | `src/index.js` | Cloudflare Worker: magic-link sign-in, sessions, one state blob per user. |
 | `migrations/` | D1 schema. |
-| `test/` | `node --test` over the merge. |
+| `test/` | `node --test` over the merge, usage tagging and Explore. |
 
 ## Run locally
 
@@ -38,6 +53,34 @@ npm test
 
 With `DEV_LINKS=1` the sign-in dialog shows an "Open the dev link" link after
 you ask for one, so the whole account flow works with no mail provider.
+
+## Explore
+
+Without `ANTHROPIC_API_KEY` the page shows a built-in evergreen list, so
+Explore works out of the box. To get a fresh list each day:
+
+```sh
+npx wrangler secret put ANTHROPIC_API_KEY
+npm run db:migrate                    # adds the explore table
+npm run deploy                        # the cron in wrangler.jsonc runs at 05:10 UTC
+```
+
+To write today's list right away (first deploy, or after changing the
+prompt), use **Write today's list now** on `/admin`, or:
+
+```sh
+curl -X POST -H "x-admin-key: $ADMIN_KEY" https://tmea.space/api/admin/explore
+```
+
+Locally, put the key in `.dev.vars`, run `npm run dev`, and do the same with
+`http://localhost:8787`, or trigger the cron with
+`curl "localhost:8787/__scheduled?cron=10+5+*+*+*"` (wrangler dev runs with
+`--test-scheduled`). A failed run keeps the previous day's list.
+
+The model is `EXPLORE_MODEL` in `wrangler.jsonc` (default `claude-sonnet-5-5`);
+change it and redeploy, or override it for one environment with
+`npx wrangler secret put EXPLORE_MODEL`, or locally in `.dev.vars`. One call a
+day, roughly 2,000 tokens in and 3,000 out. Covers are drawn in the browser, so there are no images to host.
 
 ## Deploy
 
