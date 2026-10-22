@@ -1,19 +1,20 @@
 // Tell me everything about — the home page: a sentence to finish.
 //
-// State, sync and the account live in store.js?v=8f9504b58e, shared with the prompts
+// State, sync and the account live in store.js?v=ff28f9ba8d, shared with the prompts
 // settings page (/settings), where prompts are written and settings kept. This page
 // draws the selected prompt as a sentence with a box for each blank, launches
 // it, and shows Explore under it.
 
-import * as store from './store.js?v=8f9504b58e';
-import { ENGINES, engineById } from './engines.js?v=8f9504b58e';
-import { parse, fill, defaultLabel, autoValues } from './template.js?v=8f9504b58e';
-import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=8f9504b58e';
-import { createExplore } from './explore.js?v=8f9504b58e';
-import { prefsFrom } from './interests.js?v=8f9504b58e';
+import * as store from './store.js?v=ff28f9ba8d';
+import { ENGINES, engineById } from './engines.js?v=ff28f9ba8d';
+import { parse, fill, defaultLabel, autoValues } from './template.js?v=ff28f9ba8d';
+import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=ff28f9ba8d';
+import { createExplore } from './explore.js?v=ff28f9ba8d';
+import { prefsFrom } from './interests.js?v=ff28f9ba8d';
 
 const FEED_KEY = 'tmea:explore-feed';
-const FEED_FRESH_MS = 30 * 60 * 1000;
+// A copy fetched this recently is not asked for again (rapid reloads).
+const FEED_FRESH_MS = 60 * 1000;
 
 const $ = s => document.querySelector(s);
 const tabsEl = $('#prompt-tabs');
@@ -338,8 +339,9 @@ function renderExplore() {
   loadFeed();
 }
 
-// The list is the same for everyone and changes once a day, so the page shows
-// the copy it has at once and asks again only when that copy is old. The
+// The list is the same for everyone. The page shows the copy it has at once,
+// then asks for the current one (unless it asked a moment ago) and switches
+// to it if anything changed, so edits reach the page on the next visit. The
 // request carries no cookie.
 async function loadFeed() {
   let cached = null;
@@ -348,7 +350,9 @@ async function loadFeed() {
   else explore.render();
   if (cached && Date.now() - cached.at < FEED_FRESH_MS) return;
   try {
-    const res = await fetch('/api/explore', { credentials: 'omit' });
+    // no-cache: the browser checks with the server rather than reusing its
+    // own copy; the edge keeps the answer quick.
+    const res = await fetch('/api/explore', { credentials: 'omit', cache: 'no-cache' });
     if (!res.ok) throw new Error(String(res.status));
     const feed = await res.json();
     if (!Array.isArray(feed?.cards)) throw new Error('bad feed');
@@ -412,7 +416,7 @@ function clearPreview() {
 
 // The first box's grey text: the blank's name, or the current suggestion.
 // A suggestion sits in a box of fixed width, smaller and on one line, so a
-// long topic can never rewrap the sentence and move the page (app.css?v=8f9504b58e).
+// long topic can never rewrap the sentence and move the page (app.css?v=ff28f9ba8d).
 function paintGhost() {
   const ghost = ghostOf(inputs[0]);
   if (!ghost) return;

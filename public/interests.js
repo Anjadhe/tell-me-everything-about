@@ -12,7 +12,7 @@
 // of them is ticked. That holds for every card in the list, including those a
 // collection from the card manager published into it.
 
-import { CATEGORIES, CATEGORY_IDS, TAG_IDS } from './categories.js?v=8f9504b58e';
+import { CATEGORIES, CATEGORY_IDS, TAG_IDS } from './categories.js?v=ff28f9ba8d';
 
 // Six topics to start with, every sub-topic ticked; Society and Sport are
 // there to switch on.
