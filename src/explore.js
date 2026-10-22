@@ -347,7 +347,7 @@ export async function generateInterest(env, key, text, { avoid = [] } = {}) {
 // history: earlier stored feeds, newest first ([{ day, cards }]). Their topics
 // are not repeated, and their cards fill out the list as "carried".
 // Throws if too few cards came back; the caller keeps the previous list.
-export async function generate(env, day, { fetchImpl = fetch, history = [], extras = [] } = {}) {
+export async function generate(env, day, { fetchImpl = fetch, history = [] } = {}) {
   const sources = await gatherSources(day, fetchImpl, env);
   const avoid = recentTopics(history);
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
@@ -380,7 +380,7 @@ export async function generate(env, day, { fetchImpl = fetch, history = [], extr
   });
   if (failed.length) console.error(JSON.stringify({ level: 'warn', event: 'explore_category_failed', day, failed }));
   const usedModel = results.find(r => r.status === 'fulfilled')?.value.model || model;
-  const feed = assembleFeed(day, byCategory, history, avoid.map(a => a.topic), extras);
+  const feed = assembleFeed(day, byCategory, history, avoid.map(a => a.topic));
   const today = feed.cards.filter(c => !c.carried).length;
   if (today < MIN_TODAY) throw new Error(`only ${today} usable cards${failed.length ? ` (${failed.join('; ')})` : ''}`);
   return { ...feed, source: 'daily', generatedAt: new Date().toISOString(), model: usedModel };
@@ -394,27 +394,17 @@ export function recentTopics(history) {
 }
 
 // Today's cards, taken a category at a time in turn so the list is varied
-// from the top (the leading category rotates by day), then cards from the
-// most asked-for interests, then earlier days' cards marked carried. Each
-// browser re-ranks this for its visitor.
+// from the top (the leading category rotates by day), then earlier days'
+// cards marked carried. Each browser picks from this for its visitor.
 // avoid: topics shown recently, which today's cards must not repeat even
 // in other words.
-export function assembleFeed(day, byCategory, history = [], avoid = [], extras = []) {
+export function assembleFeed(day, byCategory, history = [], avoid = []) {
   const recent = topicSet(avoid);
   const seen = new Set();
   const topics = topicSet();
   const take = c => { if (!c?.id || seen.has(c.id) || !topics.add(c.topic)) return false; seen.add(c.id); return true; };
   const lists = CATEGORY_IDS.map(id => (byCategory[id] || []).filter(c => !recent.has(c.topic)));
-  const turn = dayNumber(day) % CATEGORY_IDS.length;
-  const order = [...lists.slice(turn), ...lists.slice(0, turn)];
-  const cards = [];
-  for (let i = 0; order.some(l => i < l.length); i++) {
-    for (const l of order) {
-      const c = l[i];
-      if (c && take(c)) cards.push(c);
-    }
-  }
-  for (const c of extras) if (!recent.has(c?.topic) && take(c)) cards.push(c);
+  const cards = interleave(day, lists).filter(take);
   let carried = 0;
   for (const f of history) {
     for (const c of f.cards || []) {
@@ -425,6 +415,52 @@ export function assembleFeed(day, byCategory, history = [], avoid = [], extras =
     }
   }
   return { day, cards };
+}
+
+// One card from each category in turn, starting with the category whose
+// turn it is today.
+function interleave(day, lists) {
+  const turn = dayNumber(day) % CATEGORY_IDS.length;
+  const order = [...lists.slice(turn), ...lists.slice(0, turn)];
+  const out = [];
+  for (let i = 0; order.some(l => i < l.length); i++) for (const l of order) if (l[i]) out.push(l[i]);
+  return out;
+}
+
+// Publish cards written another way (a collection from the card manager)
+// into a stored list as that day's new cards, through the same checks as
+// the day's own: none that repeat a card in the list or a topic from the
+// last two weeks (avoid), even reworded. Within each category they are
+// spread evenly among the day's cards (not queued behind them), then the
+// categories are mixed again, so from here on nothing tells them apart:
+// tomorrow they are carried like any other card. Returns the new list and
+// how many were added.
+export function addToList(feed, cards, avoid = []) {
+  const recent = topicSet(avoid);
+  const ids = new Set(feed.cards.map(c => c.id));
+  const topics = topicSet(feed.cards.map(c => c.topic));
+  const fresh = feed.cards.filter(c => !c.carried);
+  const carried = feed.cards.filter(c => c.carried);
+  const added = (cards || []).filter(c => c?.id && !ids.has(c.id) && !recent.has(c.topic) && topics.add(c.topic) && ids.add(c.id));
+  if (!added.length) return { feed, added: 0 };
+  const lists = CATEGORY_IDS.map(id => spreadIn(fresh.filter(c => c.category === id), added.filter(c => c.category === id)));
+  return { feed: { ...feed, cards: [...interleave(feed.day, lists), ...carried] }, added: added.length };
+}
+
+// b's items placed at even intervals through a, in order.
+export function spreadIn(a, b) {
+  if (!b.length) return a;
+  if (!a.length) return b;
+  const out = [];
+  const step = (a.length + 1) / (b.length + 1);   // a's items between each of b's
+  let ai = 0;
+  b.forEach((x, k) => {
+    const until = Math.round((k + 1) * step);
+    while (ai < until && ai < a.length) out.push(a[ai++]);
+    out.push(x);
+  });
+  while (ai < a.length) out.push(a[ai++]);
+  return out;
 }
 
 function dayNumber(day) {

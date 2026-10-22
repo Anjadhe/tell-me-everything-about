@@ -9,10 +9,10 @@
 //            visitor changes anything
 //
 // A card shows when its topic is on and, if it has sub-topics, at least one
-// of them is ticked. That holds for every card, whether it came from the
-// day's list or from a collection written in the card manager.
+// of them is ticked. That holds for every card in the list, including those a
+// collection from the card manager published into it.
 
-import { CATEGORIES, CATEGORY_IDS, TAG_IDS } from './categories.js?v=3b3d0ea256';
+import { CATEGORIES, CATEGORY_IDS, TAG_IDS } from './categories.js?v=8f9504b58e';
 
 // Six topics to start with, every sub-topic ticked; Society and Sport are
 // there to switch on.
@@ -80,7 +80,7 @@ export function rank(cards, prefs, { dismissed = new Set(), seenBefore = new Set
     (!category || c.category === category));
   const scored = pool.map((c, i) => ({ c, s: 1 - i / Math.max(1, pool.length) - (c.carried ? 0.4 : 0) }));
   scored.sort((a, b) => b.s - a.s);
-  return category ? scored.map(x => x.c) : paceCollections(spread(scored.map(x => x.c)));
+  return category ? scored.map(x => x.c) : spread(scored.map(x => x.c));
 }
 
 // Keep the best first, but don't let one topic take more than two places in
@@ -93,24 +93,6 @@ export function spread(list) {
     let i = a && a === b ? rest.findIndex(c => c.category !== a) : 0;
     if (i < 0) i = 0;
     out.push(rest.splice(i, 1)[0]);
-  }
-  return out;
-}
-
-// Collection cards are many and timeless. In the mix they come one in every
-// PACK_EVERY places, after three of the day's cards, so the day's cards lead
-// and the collections are spread through rather than piled at the end. A
-// topic's pill shows them all in order.
-export const PACK_EVERY = 4;
-
-export function paceCollections(list) {
-  const own = list.filter(c => c.pack);
-  const rest = list.filter(c => !c.pack);
-  const out = [];
-  let since = 0;                          // the day's cards since the last collection card
-  while (own.length || rest.length) {
-    if (own.length && (!rest.length || since >= PACK_EVERY - 1)) { out.push(own.shift()); since = 0; }
-    else { out.push(rest.shift()); since++; }
   }
   return out;
 }

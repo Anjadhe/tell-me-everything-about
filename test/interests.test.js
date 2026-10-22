@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { prefsFrom, topicsValue, visible, setCategory, setTag, rank, spread, paceCollections, placeSponsored, SPONSOR_SLOTS, DEFAULT_TOPICS } from '../public/interests.js';
+import { prefsFrom, topicsValue, visible, setCategory, setTag, rank, spread, placeSponsored, SPONSOR_SLOTS, DEFAULT_TOPICS } from '../public/interests.js';
 import { CATEGORIES } from '../public/categories.js';
 
 const settings = (s = {}) => (k, fallback) => (s[k] === undefined ? fallback : s[k]);
@@ -71,16 +71,6 @@ test('a topic pill shows only that topic', () => {
 test('spread lets no topic take more than two places in a row while others wait', () => {
   const list = ['s1', 's2', 's3', 's4', 'h1'].map(id => ({ id, category: id[0] }));
   assert.deepEqual(spread(list).map(x => x.id), ['s1', 's2', 'h1', 's3', 's4']);
-});
-
-test('collection cards are spread one in every four places, the day’s cards leading', () => {
-  const list = [...Array.from({ length: 12 }, (_, i) => c(`d${i}`, 'science')), ...Array.from({ length: 6 }, (_, i) => c(`p${i}`, 'history', { pack: 'x' }))];
-  const out = paceCollections(list).map(x => x.id);
-  assert.deepEqual(out.slice(0, 8), ['d0', 'd1', 'd2', 'p0', 'd3', 'd4', 'd5', 'p1']);
-  const lastOther = out.findLastIndex(id => id.startsWith('d'));
-  const at = out.map((id, i) => (id.startsWith('p') && i < lastOther ? i : -1)).filter(i => i >= 0);
-  for (let i = 1; i < at.length; i++) assert.ok(at[i] - at[i - 1] >= 4, out.join(','));
-  assert.equal(out.length, list.length);
 });
 
 test('sponsored cards go only in their slots, in order, never outside the visitor’s topics', () => {

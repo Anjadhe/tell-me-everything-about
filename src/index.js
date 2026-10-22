@@ -9,7 +9,7 @@
 
 import { merge, normalize, sameState } from '../public/merge.js';
 import { ENGINE_IDS, LAUNCH_FROM, tagRows, lastDays } from './usage.js';
-import { generate, evergreenFeed, sponsoredCard, pinnedCard, interestKey, generateInterest, PACK_FRESH_DAYS, adminCard, rowForEditor } from './explore.js';
+import { generate, evergreenFeed, sponsoredCard, pinnedCard, interestKey, generateInterest, PACK_FRESH_DAYS, adminCard, rowForEditor, addToList, recentTopics } from './explore.js';
 
 const SESSION_COOKIE = 'tmea_session';
 const SESSION_DAYS = 90;
@@ -348,22 +348,16 @@ async function getExplore(request, env, ctx) {
   if (hit) return hit;
 
   const day = today();
-  const [latest, campaigns, pins, packs] = await env.DB.batch([
+  // Collections written since the last publish join the list first.
+  await publishPending(env).catch(err => console.error(JSON.stringify({ level: 'error', event: 'publish_failed', message: err?.message })));
+  const [latest, campaigns, pins] = await env.DB.batch([
     env.DB.prepare('SELECT data FROM explore ORDER BY day DESC LIMIT 1'),
     env.DB.prepare('SELECT * FROM sponsored WHERE active = 1 AND (starts IS NULL OR starts <= ?) AND (ends IS NULL OR ends >= ?) ORDER BY id').bind(day, day),
     env.DB.prepare('SELECT * FROM pinned WHERE active = 1 AND (starts IS NULL OR starts <= ?) AND (ends IS NULL OR ends >= ?) ORDER BY position, id').bind(day, day),
-    env.DB.prepare('SELECT key, name, data FROM interest_packs WHERE suitable = 1 AND alias_of IS NULL ORDER BY name'),
   ]);
   const feed = latest.results[0] ? JSON.parse(latest.results[0].data) : evergreenFeed(day);
   feed.sponsored = campaigns.results.map(sponsoredCard).filter(Boolean);
   feed.pinned = pins.results.map(pinnedCard).filter(Boolean);
-  // Collections written in the card manager, all of them: their cards join
-  // the pool, and each browser shows the ones that fit its visitor's topics.
-  feed.collections = packs.results.map(r => {
-    let cards = [];
-    try { cards = JSON.parse(r.data); } catch { /* none */ }
-    return { key: r.key, name: r.name, cards };
-  }).filter(c => c.cards.length);
   const body = JSON.stringify(feed);
   const res = new Response(body, {
     headers: {
@@ -394,6 +388,7 @@ async function refreshExplore(env) {
         .bind(day, JSON.stringify(feed), new Date().toISOString()),
       env.DB.prepare('DELETE FROM explore WHERE day < ?').bind(cutoff),
     ]);
+    await publishPending(env);
     const fresh = feed.cards.filter(c => !c.carried).length;
     console.log(JSON.stringify({ level: 'info', event: 'explore_written', day, model: feed.model, cards: fresh, carried: feed.cards.length - fresh }));
     return { ok: true, day, model: feed.model, cards: fresh, carried: feed.cards.length - fresh };
@@ -417,7 +412,56 @@ async function countSponsored(request, env, ctx) {
 // ---------- collections ----------
 
 // Collections are written from the card manager: a term the admin types, a
-// learning path Claude writes for it. Visitors never send terms.
+// learning path Claude writes for it. Visitors never send terms. Once
+// written, a collection's cards are published into the daily list (the
+// newest stored one) as that day's new cards, through the same checks as
+// the day's own (addToList), and from then on are cards like any other.
+
+// Publish cards into the newest list. Returns how many went in.
+async function publishCards(env, cards) {
+  if (!cards.length) return 0;
+  const latest = await env.DB.prepare('SELECT day, data FROM explore ORDER BY day DESC LIMIT 1').first();
+  if (!latest) return 0;   // nothing to publish into until the first daily run
+  const before = await env.DB.prepare('SELECT day, data FROM explore WHERE day < ? ORDER BY day DESC LIMIT 14').bind(latest.day).all();
+  const history = before.results.map(r => { try { return { day: r.day, cards: JSON.parse(r.data).cards || [] }; } catch { return { day: r.day, cards: [] }; } });
+  const { feed, added } = addToList(JSON.parse(latest.data), cards, recentTopics(history).map(t => t.topic));
+  if (added) await env.DB.prepare('UPDATE explore SET data = ? WHERE day = ?').bind(JSON.stringify(feed), latest.day).run();
+  return added;
+}
+
+// Every collection not yet published, in its path order.
+async function publishPending(env) {
+  const rows = (await env.DB.prepare('SELECT key, data FROM interest_packs WHERE suitable = 1 AND alias_of IS NULL AND published_at IS NULL').all()).results;
+  if (!rows.length) return 0;
+  const latest = await env.DB.prepare('SELECT day FROM explore ORDER BY day DESC LIMIT 1').first();
+  if (!latest) return 0;
+  const order = { start: 0, deeper: 1, rabbithole: 2 };
+  const cards = rows.flatMap(r => { try { return JSON.parse(r.data); } catch { return []; } })
+    .sort((a, b) => (order[a.step] ?? 1) - (order[b.step] ?? 1));
+  const added = await publishCards(env, cards);
+  await env.DB.prepare(`UPDATE interest_packs SET published_at = ? WHERE key IN (${rows.map(() => '?').join(',')})`).bind(new Date().toISOString(), ...rows.map(r => r.key)).run();
+  console.log(JSON.stringify({ level: 'info', event: 'collections_published', collections: rows.length, cards: added }));
+  return added;
+}
+
+// An edited or deleted collection card, in the lists it was published to.
+// card null removes it; a list keeps its own carried and day marks.
+async function updateCopies(env, match, card) {
+  const rows = (await env.DB.prepare('SELECT day, data FROM explore').all()).results;
+  const writes = [];
+  for (const r of rows) {
+    let feed;
+    try { feed = JSON.parse(r.data); } catch { continue; }
+    let changed = false;
+    feed.cards = feed.cards.flatMap(c => {
+      if (!match(c)) return [c];
+      changed = true;
+      return card ? [{ ...card, ...(c.carried ? { carried: true, day: c.day } : {}) }] : [];
+    });
+    if (changed) writes.push(env.DB.prepare('UPDATE explore SET data = ? WHERE day = ?').bind(JSON.stringify(feed), r.day));
+  }
+  if (writes.length) await env.DB.batch(writes);
+}
 
 // A first pack for a term. Claude also says what the subject is usually
 // called; if there is already a pack under that name, this term becomes an
@@ -449,7 +493,7 @@ async function storePack(env, key, pack) {
   const now = new Date().toISOString();
   await env.DB.prepare(
     `INSERT INTO interest_packs (key, name, suitable, data, created_at, last_used, hits) VALUES (?, ?, ?, ?, ?, ?, 1)
-     ON CONFLICT(key) DO UPDATE SET name = excluded.name, suitable = excluded.suitable, data = excluded.data, created_at = excluded.created_at`
+     ON CONFLICT(key) DO UPDATE SET name = excluded.name, suitable = excluded.suitable, data = excluded.data, created_at = excluded.created_at, published_at = NULL`
   ).bind(key, pack.name || key.replace(/-/g, ' '), pack.suitable ? 1 : 0, JSON.stringify(pack.cards), now, now).run();
   return pack;
 }
@@ -527,8 +571,15 @@ async function saveCard(env, body) {
     if (id && at < 0) return json({ error: 'That card is no longer there. Reload the list.' }, 409);
     if (!id && cards.some(c => c.id === card.id)) return json({ error: 'There is already a card with that topic.' }, 409);
     if (at >= 0) cards[at] = card; else cards.unshift(card);
-    if (isDaily) await env.DB.prepare('UPDATE explore SET data = ? WHERE day = ?').bind(JSON.stringify(data), body.day).run();
-    else await env.DB.prepare('UPDATE interest_packs SET data = ? WHERE key = ?').bind(JSON.stringify(cards), body.key).run();
+    if (isDaily) {
+      await env.DB.prepare('UPDATE explore SET data = ? WHERE day = ?').bind(JSON.stringify(data), body.day).run();
+    } else {
+      await env.DB.prepare('UPDATE interest_packs SET data = ? WHERE key = ?').bind(JSON.stringify(cards), body.key).run();
+      // The collection's published copies follow: an edit everywhere it
+      // went, a new card into the newest list.
+      if (at >= 0) await updateCopies(env, c => c.id === card.id, card);
+      else await publishCards(env, [card]);
+    }
     return json({ ok: true, card });
   }
   const r = checked.row;
@@ -560,13 +611,14 @@ async function generateCollection(env, body) {
       const row = await env.DB.prepare('SELECT name, data FROM interest_packs WHERE key = ? AND alias_of IS NULL').bind(key).first();
       if (!row) return json({ error: 'No such collection.' }, 404);
       const pack = await writePack(env, key, row.name, JSON.parse(row.data).map(c => c.topic));
-      return json(pack.suitable ? { ok: true, key, name: pack.name, cards: pack.cards.length } : { error: 'Claude would not write this one again.' }, pack.suitable ? 200 : 422);
+      if (!pack.suitable) return json({ error: 'Claude would not write this one again.' }, 422);
+      return json({ ok: true, key, name: pack.name, cards: pack.cards.length, published: await publishPending(env) });
     }
     const existing = await env.DB.prepare('SELECT key, alias_of FROM interest_packs WHERE key = ?').bind(key).first();
     if (existing) return json({ error: `There is already a collection for that${existing.alias_of ? ` (as ${existing.alias_of.replace(/-/g, ' ')})` : ''}.` }, 409);
     const pack = await newPack(env, key, term);
     if (!pack.suitable) return json({ error: 'Claude judged this not something to write a learning path about.' }, 422);
-    return json({ ok: true, key: interestKey(pack.name) || key, name: pack.name, cards: pack.cards.length });
+    return json({ ok: true, key: interestKey(pack.name) || key, name: pack.name, cards: pack.cards.length, published: await publishPending(env) });
   } catch (err) {
     console.error(JSON.stringify({ level: 'error', event: 'collection_failed', key, message: err?.message }));
     return json({ error: `Could not write it: ${err?.message || 'unknown error'}` }, 502);
@@ -580,6 +632,7 @@ async function removeCard(env, body) {
       env.DB.prepare('DELETE FROM interest_packs WHERE key = ?').bind(body.key || ''),
       env.DB.prepare('DELETE FROM interest_packs WHERE alias_of = ?').bind(body.key || ''),
     ]);
+    await updateCopies(env, c => c.pack === body.key, null);
     return json({ ok: true });
   }
   if (!id) return json({ error: 'Which card?' }, 400);
@@ -595,6 +648,7 @@ async function removeCard(env, body) {
       await env.DB.prepare('UPDATE explore SET data = ? WHERE day = ?').bind(JSON.stringify(data), body.day).run();
     } else {
       await env.DB.prepare('UPDATE interest_packs SET data = ? WHERE key = ?').bind(JSON.stringify(data.filter(c => c.id !== id)), body.key).run();
+      await updateCopies(env, c => c.id === id, null);
     }
     return json({ ok: true });
   }

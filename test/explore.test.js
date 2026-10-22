@@ -224,13 +224,6 @@ test('the interest schema asks for a step and a category on every card', () => {
   assert.deepEqual(item.properties.step.enum, ['start', 'deeper', 'rabbithole']);
 });
 
-test('popular interests join the daily list after today’s cards, before carried ones', () => {
-  const by = { science: cleanCards([card({ topic: 'Fresh' })], { category: 'science' }) };
-  const extras = [{ id: 'in-x-a', topic: 'A', category: 'history', pack: 'x' }, { id: 'fresh', topic: 'dup' }];
-  const history = [{ day: '2026-10-20', cards: [{ id: 'old', topic: 'Old', category: 'ideas' }] }];
-  const ids = assembleFeed('2026-10-21', by, history, [], extras).cards.map(c => c.id);
-  assert.deepEqual(ids, ['fresh', 'in-x-a', 'old']);
-});
 
 import { topicKey, sameTopic, topicSet } from '../src/explore.js';
 
@@ -323,4 +316,42 @@ test('a pinned row becomes a card on the page, and back for the editor', () => {
   const back = rowForEditor(row, 'pinned');
   assert.deepEqual([back.topic, back.tags, back.position, back.active, back.figureLabel], ['Rocket stoves', ['engineering'], 1, true, 'first one']);
   assert.equal(pinnedCard({ ...row, id: 'Bad Id' }), null);
+});
+
+import { addToList, spreadIn } from '../src/explore.js';
+
+test('a collection is published into a list as that day’s cards, through the same checks', () => {
+  const by = {};
+  for (const id of ['science', 'history']) by[id] = cleanCards([card({ topic: `${id} one` }), card({ topic: `${id} two` })], { category: id });
+  const feed = assembleFeed('2026-10-22', by, [{ day: '2026-10-21', cards: [{ id: 'old', topic: 'Old card', category: 'ideas' }] }]);
+  const pack = cleanPack('rome', { suitable: true, name: 'Roman history', cards: [
+    { ...card({ topic: 'Roman roads' }), category: 'history', step: 'start' },
+    { ...card({ topic: 'History one' }), category: 'history', step: 'start' },      // already in the list, reworded
+    { ...card({ topic: 'Aqueducts' }), category: 'history', step: 'deeper' },        // shown last week
+    { ...card({ topic: 'Roman concrete' }), category: 'science', step: 'deeper' },
+    { ...card({ topic: 'The Antonine Wall' }), category: 'history', step: 'rabbithole' },
+  ] }).cards;
+  const { feed: out, added } = addToList(feed, pack, ['The aqueducts']);
+  assert.equal(added, 3);
+  const fresh = out.cards.filter(c => !c.carried).map(c => c.topic);
+  assert.ok(fresh.includes('Roman roads') && fresh.includes('Roman concrete') && fresh.includes('The Antonine Wall'));
+  assert.ok(!fresh.includes('Aqueducts'));
+  assert.equal(out.cards.filter(c => /history one/i.test(c.topic)).length, 1);
+  // mixed across topics with the day's cards, carried cards still last
+  assert.notDeepEqual(fresh.slice(0, 2).map(t => t.startsWith('Roman')), [true, true]);
+  assert.equal(out.cards[out.cards.length - 1].id, 'old');
+  // publishing again adds nothing
+  assert.equal(addToList(out, pack, ['The aqueducts']).added, 0);
+});
+
+test('spreadIn places cards at even intervals, never all at the end', () => {
+  const a = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6'], b = ['b1', 'b2', 'b3'];
+  const out = spreadIn(a, b);
+  assert.equal(out.length, 9);
+  assert.deepEqual(out.filter(x => x[0] === 'a'), a);
+  assert.deepEqual(out.filter(x => x[0] === 'b'), b);
+  const at = b.map(x => out.indexOf(x));
+  assert.ok(at[0] <= 2 && at[2] < 8, out.join(','));
+  assert.deepEqual(spreadIn([], ['x']), ['x']);
+  assert.deepEqual(spreadIn(['x'], []), ['x']);
 });

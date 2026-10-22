@@ -100,8 +100,10 @@ of For you and of their category between optional dates), sponsored cards,
 and collections. Add, edit or delete cards, with a live preview. To make a
 collection, type a subject and press Generate: Claude writes a learning path
 (about 12 cards) for it; write one again for fresh topics. A collection's
-cards join everyone's Explore and are chosen by topic and sub-topic like any
-other card. Every save goes through the same checks
+cards are published into the day's list through the same checks as the day's
+own (no repeats of the list or of the last two weeks), and from then on are
+carried, chosen by topic and retired like any other card. Edits and deletes
+in the card manager reach the published copies. Every save goes through the same checks
 as a generated card (`adminCard` in `src/explore.js`), and an edited card keeps
 its id so saved and seen cards still match. Changes reach visitors within 15
 minutes.

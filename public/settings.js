@@ -6,12 +6,12 @@
 //
 // Everything saves as you type. A new prompt is kept once it has words.
 
-import * as store from './store.js?v=3b3d0ea256';
-import { ENGINES, engineById } from './engines.js?v=3b3d0ea256';
-import { describe, AUTO_FILLS, autoValues, fill, defaultLabel, highlight, parse } from './template.js?v=3b3d0ea256';
-import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=3b3d0ea256';
-import { CATEGORIES, categoryById, KINDS } from './categories.js?v=3b3d0ea256';
-import { prefsFrom, topicsValue, setCategory, setTag, DEFAULT_TOPICS } from './interests.js?v=3b3d0ea256';
+import * as store from './store.js?v=8f9504b58e';
+import { ENGINES, engineById } from './engines.js?v=8f9504b58e';
+import { describe, AUTO_FILLS, autoValues, fill, defaultLabel, highlight, parse } from './template.js?v=8f9504b58e';
+import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=8f9504b58e';
+import { CATEGORIES, categoryById, KINDS } from './categories.js?v=8f9504b58e';
+import { prefsFrom, topicsValue, setCategory, setTag, DEFAULT_TOPICS } from './interests.js?v=8f9504b58e';
 
 const EXAMPLES = [
   { label: 'Compare', template: 'Compare {thing} with {other thing}: how they differ, where each one wins, and which to choose when' },

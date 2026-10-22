@@ -8,7 +8,7 @@
 // first box instead.
 //
 // Which cards, in what order, is decided here in the browser from the
-// visitor's preferences (interests.js?v=3b3d0ea256). Feedback hides or nudges without
+// visitor's preferences (interests.js?v=8f9504b58e). Feedback hides or nudges without
 // reshuffling what is on screen: the order is fixed until the visitor picks
 // another pill or comes back later.
 //
@@ -16,8 +16,8 @@
 // for science, strata for history, …), varied by a seed from the topic so no
 // two look alike, with the card's one striking figure set large on top.
 
-import { CATEGORIES, categoryById, tagById, ORIGINS, KINDS, DEPTHS } from './categories.js?v=3b3d0ea256';
-import { rank, placeSponsored, visible, setCategory, setTag, topicsValue } from './interests.js?v=3b3d0ea256';
+import { CATEGORIES, categoryById, tagById, ORIGINS, KINDS, DEPTHS } from './categories.js?v=8f9504b58e';
+import { rank, placeSponsored, visible, setCategory, setTag, topicsValue } from './interests.js?v=8f9504b58e';
 
 // Three rows to start (the wide lead card, then three and three); each
 // "Show more" adds two rows under them.
@@ -55,17 +55,10 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
   let pill = null;        // a category, 'saved', or null for "For you"
   let frozen = null;      // card ids in the order first shown
 
-  // The day's list plus every collection's cards, all chosen the same way.
+  // The day's list, chosen for this visitor.
   function ranked(category = pill) {
     if (!feed) return [];
-    const ids = new Set();
-    const own = packs().flatMap(p => pathOrder(p.cards)).filter(c => !ids.has(c.id) && ids.add(c.id));
-    return rank([...feed.cards, ...own], prefs(), { dismissed: readDismissed(), seenBefore: seenBefore(feed.day), category });
-  }
-
-  // Collections written in the card manager: more cards for the pool.
-  function packs() {
-    return feed?.collections || [];
+    return rank(feed.cards, prefs(), { dismissed: readDismissed(), seenBefore: seenBefore(feed.day), category });
   }
 
   // The ranked list in the order already on screen: cards that are now hidden
@@ -451,7 +444,7 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
   }
 
   function shownStill(id) {
-    const c = [...(feed?.cards || []), ...(feed?.pinned || []), ...packs().flatMap(p => p.cards)].find(x => x.id === id);
+    const c = [...(feed?.cards || []), ...(feed?.pinned || [])].find(x => x.id === id);
     return !c || visible(c, prefs());
   }
 
@@ -544,7 +537,7 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
 
   return {
     setFeed(next) {
-      const ids = f => [...f.cards, ...(f.sponsored || []), ...(f.pinned || []), ...(f.collections || []).flatMap(x => x.cards)].map(c => `${c.id}:${c.topic}:${c.hook}:${c.figure}`).join('|');
+      const ids = f => [...f.cards, ...(f.sponsored || []), ...(f.pinned || [])].map(c => `${c.id}:${c.topic}:${c.hook}:${c.figure}`).join('|');
       const changed = !feed || next.day !== feed.day || ids(next) !== ids(feed);
       feed = next;
       if (changed) refresh();
@@ -557,12 +550,6 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     topics: () => shown.map(c => c.topic),
     hasFeed: () => !!feed,
   };
-}
-
-// A pack's cards along its path: ways in, then deeper, then rabbit holes.
-const STEP_ORDER = { start: 0, deeper: 1, rabbithole: 2 };
-function pathOrder(cards) {
-  return cards.map((c, i) => [c, i]).sort((a, b) => (STEP_ORDER[a[0].step] ?? 1) - (STEP_ORDER[b[0].step] ?? 1) || a[1] - b[1]).map(x => x[0]);
 }
 
 function readDismissed() {
