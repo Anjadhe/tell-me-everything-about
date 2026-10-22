@@ -1,15 +1,16 @@
 // Tell me everything about — the home page: a sentence to finish.
 //
-// State, sync and the account live in store.js?v=d45deaf580, shared with the prompts
+// State, sync and the account live in store.js?v=98030b1b32, shared with the prompts
 // page (/prompts) where prompts are written and settings are kept. This page
 // draws the selected prompt as a sentence with a box for each blank, launches
 // it, and shows Explore under it.
 
-import * as store from './store.js?v=d45deaf580';
-import { ENGINES, engineById } from './engines.js?v=d45deaf580';
-import { parse, fill, defaultLabel } from './template.js?v=d45deaf580';
-import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=d45deaf580';
-import { createExplore } from './explore.js?v=d45deaf580';
+import * as store from './store.js?v=98030b1b32';
+import { ENGINES, engineById } from './engines.js?v=98030b1b32';
+import { parse, fill, defaultLabel } from './template.js?v=98030b1b32';
+import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=98030b1b32';
+import { createExplore } from './explore.js?v=98030b1b32';
+import { prefsFrom } from './interests.js?v=98030b1b32';
 
 const FEED_KEY = 'tmea:explore-feed';
 const FEED_FRESH_MS = 30 * 60 * 1000;
@@ -86,7 +87,7 @@ function renderSentence() {
   ({ inputs } = buildSentence(sentenceEl, tpl, { values }));
   sentenceEl.classList.toggle('multi', blanks.length > 1);
   if (!single()) setSuggestion('');
-  else if (suggestion) ghostOf(inputs[0]).textContent = suggestion;
+  else paintGhost();
   engineName.textContent = currentEngine().name;
   const p = selected();
   editLink.href = p ? `/prompts#${encodeURIComponent(p.id)}` : '/prompts';
@@ -315,8 +316,10 @@ function renderExplore() {
     fill: fillFirst,
     preview,
     clearPreview,
-    interests: () => store.setting('interests', []),
+    prefs: () => prefsFrom(store.setting),
+    updatePrefs: patch => store.updateSettings(patch),
     recent: store.recentTopics,
+    report: countSponsored,
     launched(kind, topic, e) {
       countLaunch(currentEngine().id, kind);
       store.remember(topic);
@@ -353,7 +356,7 @@ async function loadFeed() {
 
 // Hovering a card writes it into the first box, or a card's question in
 // place of the sentence, so you see exactly what will be asked. The stage
-// keeps its height (app.css?v=d45deaf580), so nothing below moves.
+// keeps its height (app.css?v=98030b1b32), so nothing below moves.
 function preview(kind, text) {
   previewing = kind;
   const slot = inputs[0]?.parentElement;
@@ -363,6 +366,7 @@ function preview(kind, text) {
     sentenceEl.classList.add('whole-preview');
   } else if (slot) {
     sentenceEl.classList.remove('whole-preview');
+    slot.classList.remove('suggesting');
     slot.classList.add('previewing');
     slot.dataset.value = text;
     ghostOf(inputs[0]).textContent = text;
@@ -377,8 +381,18 @@ function clearPreview() {
   if (!slot) return;
   slot.classList.remove('previewing');
   slot.dataset.value = inputs[0].value;
+  paintGhost();
+}
+
+// The first box's grey text: the blank's name, or the current suggestion.
+// A suggestion sits in a box of fixed width, smaller and on one line, so a
+// long topic can never rewrap the sentence and move the page (app.css?v=98030b1b32).
+function paintGhost() {
   const ghost = ghostOf(inputs[0]);
-  ghost.textContent = suggestion || ghost.dataset.name;
+  if (!ghost || previewing) return;
+  const on = !!suggestion && single();
+  ghost.parentElement.classList.toggle('suggesting', on);
+  ghost.textContent = on ? suggestion : ghost.dataset.name;
 }
 
 // The empty box suggests the cards' topics in turn; Tab takes one. Only on
@@ -395,7 +409,7 @@ function setSuggestion(text) {
   if (previewing || !ghost) return;
   ghost.classList.add('swap');
   setTimeout(() => {
-    if (!previewing) ghost.textContent = suggestion || ghost.dataset.name;
+    paintGhost();
     ghost.classList.remove('swap');
   }, 140);
 }
@@ -417,6 +431,14 @@ setInterval(() => {
   suggestAt = (suggestAt + 1) % list.length;
   setSuggestion(list[suggestAt]);
 }, 4500);
+
+// Sponsored cards: one anonymous count per view (once a day) or click. The
+// card's id and the event, nothing else; no cookie goes with it.
+function countSponsored(id, event) {
+  try {
+    fetch('/api/sponsored', { method: 'POST', keepalive: true, credentials: 'omit', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, event }) }).catch(() => {});
+  } catch { /* never block on this */ }
+}
 
 // ---------- account ----------
 
@@ -479,7 +501,7 @@ store.subscribe(what => {
     selectedId = store.selectedId() || selectedId;
     renderTabs();
     renderSentence();
-    renderExplore();
+    if (explore && exploreOn()) explore.refresh(); else renderExplore();
   }
 });
 

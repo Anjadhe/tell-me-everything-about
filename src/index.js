@@ -9,7 +9,7 @@
 
 import { merge, normalize, sameState } from '../public/merge.js';
 import { ENGINE_IDS, LAUNCH_FROM, tagRows, lastDays } from './usage.js';
-import { generate, evergreenFeed } from './explore.js';
+import { generate, evergreenFeed, sponsoredCard } from './explore.js';
 
 const SESSION_COOKIE = 'tmea_session';
 const SESSION_DAYS = 90;
@@ -59,6 +59,7 @@ async function route(request, env, ctx, url) {
   if (pathname === '/api/admin/usage' && method === 'GET') return adminUsage(request, env);
   if (pathname === '/api/explore' && method === 'GET') return getExplore(request, env, ctx);
   if (pathname === '/api/admin/explore' && method === 'POST') return adminExplore(request, env);
+  if (pathname === '/api/sponsored' && method === 'POST') return countSponsored(request, env, ctx);
   return json({ error: 'Not found.' }, 404);
 }
 
@@ -220,12 +221,13 @@ async function adminUsage(request, env) {
 
   const days = lastDays(14);
   const since = days[0];
-  const [accounts, signins, launches, froms, explore] = await env.DB.batch([
+  const [accounts, signins, launches, froms, explore, sponsoredRows] = await env.DB.batch([
     env.DB.prepare('SELECT (SELECT COUNT(*) FROM users) AS users, (SELECT COUNT(*) FROM sessions WHERE expires_at > ?) AS sessions').bind(new Date().toISOString()),
     env.DB.prepare("SELECT substr(used_at, 1, 10) AS day, COUNT(*) AS n FROM magic_links WHERE used_at IS NOT NULL AND used_at >= ? GROUP BY day").bind(since),
     env.DB.prepare("SELECT day, key, n FROM counters WHERE kind = 'launch' AND day >= ?").bind(since),
     env.DB.prepare("SELECT key, SUM(n) AS n FROM counters WHERE kind = 'from' AND day >= ? GROUP BY key").bind(since),
     env.DB.prepare('SELECT day, created_at, data FROM explore ORDER BY day DESC LIMIT 1'),
+    env.DB.prepare("SELECT kind, key, SUM(n) AS n FROM counters WHERE kind IN ('sponsored-view', 'sponsored-click') AND day >= ? GROUP BY kind, key").bind(since),
   ]);
 
   const launchByDay = Object.fromEntries(days.map(d => [d, 0]));
@@ -238,13 +240,23 @@ async function adminUsage(request, env) {
   for (const r of signins.results) signinByDay[r.day] = r.n;
 
   const launchFrom = Object.fromEntries(froms.results.map(r => [r.key, r.n]));
+  const sponsored = {};
+  for (const r of sponsoredRows.results) {
+    sponsored[r.key] ||= { views: 0, clicks: 0 };
+    sponsored[r.key][r.kind === 'sponsored-view' ? 'views' : 'clicks'] += r.n;
+  }
   const latest = explore.results[0];
   const exploreInfo = latest
     ? { day: latest.day, createdAt: latest.created_at, ...pick(JSON.parse(latest.data)) }
     : null;
 
   const traffic = await edgeTraffic(env, days);
-  function pick(feed) { return { cards: feed.cards.length, model: feed.model || null }; }
+  function pick(feed) {
+    const fresh = feed.cards.filter(c => !c.carried);
+    const byCategory = {};
+    for (const c of fresh) byCategory[c.category] = (byCategory[c.category] || 0) + 1;
+    return { cards: fresh.length, carried: feed.cards.length - fresh.length, byCategory, model: feed.model || null };
+  }
 
   return json({
     generatedAt: new Date().toISOString(),
@@ -254,6 +266,7 @@ async function adminUsage(request, env) {
     launchByDay,
     launchByEngine,
     launchFrom,
+    sponsored,
     explore: exploreInfo,
     traffic,
   });
@@ -300,8 +313,14 @@ async function getExplore(request, env, ctx) {
   const hit = await cache.match(key);
   if (hit) return hit;
 
-  const row = await env.DB.prepare('SELECT data FROM explore ORDER BY day DESC LIMIT 1').first();
-  const body = row ? row.data : JSON.stringify(evergreenFeed(today()));
+  const day = today();
+  const [latest, campaigns] = await env.DB.batch([
+    env.DB.prepare('SELECT data FROM explore ORDER BY day DESC LIMIT 1'),
+    env.DB.prepare('SELECT * FROM sponsored WHERE active = 1 AND (starts IS NULL OR starts <= ?) AND (ends IS NULL OR ends >= ?) ORDER BY id').bind(day, day),
+  ]);
+  const feed = latest.results[0] ? JSON.parse(latest.results[0].data) : evergreenFeed(day);
+  feed.sponsored = campaigns.results.map(sponsoredCard).filter(Boolean);
+  const body = JSON.stringify(feed);
   const res = new Response(body, {
     headers: {
       'content-type': 'application/json',
@@ -319,19 +338,36 @@ async function refreshExplore(env) {
   if (!env.ANTHROPIC_API_KEY) return { ok: false, reason: 'ANTHROPIC_API_KEY is not set.' };
   const day = today();
   try {
-    const feed = await generate(env, day);
+    // The last two weeks, newest first: not repeated, and carried along.
+    const rows = await env.DB.prepare('SELECT day, data FROM explore WHERE day < ? ORDER BY day DESC LIMIT 14').bind(day).all();
+    const history = rows.results.map(r => {
+      try { return { day: r.day, cards: JSON.parse(r.data).cards || [] }; } catch { return { day: r.day, cards: [] }; }
+    });
+    const feed = await generate(env, day, { history });
     const cutoff = new Date(Date.now() - EXPLORE_KEEP_DAYS * 86400_000).toISOString().slice(0, 10);
     await env.DB.batch([
       env.DB.prepare('INSERT INTO explore (day, data, created_at) VALUES (?, ?, ?) ON CONFLICT(day) DO UPDATE SET data = excluded.data, created_at = excluded.created_at')
         .bind(day, JSON.stringify(feed), new Date().toISOString()),
       env.DB.prepare('DELETE FROM explore WHERE day < ?').bind(cutoff),
     ]);
-    console.log(JSON.stringify({ level: 'info', event: 'explore_written', day, model: feed.model, cards: feed.cards.length }));
-    return { ok: true, day, model: feed.model, cards: feed.cards.length };
+    const fresh = feed.cards.filter(c => !c.carried).length;
+    console.log(JSON.stringify({ level: 'info', event: 'explore_written', day, model: feed.model, cards: fresh, carried: feed.cards.length - fresh }));
+    return { ok: true, day, model: feed.model, cards: fresh, carried: feed.cards.length - fresh };
   } catch (err) {
     console.error(JSON.stringify({ level: 'error', event: 'explore_failed', day, message: err?.message }));
     throw err;
   }
+}
+
+// One anonymous count per sponsored view or click: the card and the event,
+// nothing else. Views are sent once a day per browser (public/explore.js).
+async function countSponsored(request, env, ctx) {
+  const body = await readJson(request);
+  const id = typeof body?.id === 'string' && /^sp-[a-z0-9-]{1,40}$/.test(body.id) ? body.id : null;
+  const event = body?.event === 'view' || body?.event === 'click' ? body.event : null;
+  if (!id || !event) return new Response(null, { status: 204 });
+  ctx.waitUntil(bump(env, today(), `sponsored-${event}`, id));
+  return new Response(null, { status: 204 });
 }
 
 // Run the daily job now, for the first deploy or after changing the prompt.

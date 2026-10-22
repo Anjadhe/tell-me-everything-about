@@ -9,9 +9,12 @@ wherever you like. Up to six prompts, each with its own destination.
 Under the box, **Explore** shows the day's topics as cards, the way Firefox's
 new tab once showed Pocket stories. A card is only a topic: it opens with
 whichever prompt is selected, in that prompt's engine. Each morning a cron in
-the Worker reads Wikipedia's featured feed and the Hacker News front page and
-asks Claude to pick the topics and write the cards; everyone gets the same
-list.
+the Worker reads Wikipedia, Hacker News, Reddit's Today I Learned and feeds
+for each category, and asks Claude for about ten cards per category, skipping
+anything used in the last two weeks. Everyone gets the same list; each
+browser picks and orders from it using the visitor's preferences
+(`public/interests.js`), so personalisation never reaches the server's list
+or Claude. Sponsored cards follow the same rule.
 
 The page is static and loads from the edge cache with no framework and no web
 fonts. Everything lives in the browser's localStorage. Signing in (a link by
@@ -31,8 +34,9 @@ plain redirect from the browser to the engine.
 | `public/engines.js` | The destinations. |
 | `public/merge.js` | The one merge (per prompt, newest wins, tombstones). Runs in the page and the Worker. |
 | `public/explore.js` | Explore cards: links aimed through the selected prompt, hover previews, and the generated covers. |
-| `public/categories.js` | Explore's categories and their colours. Shared by the page and the Worker. |
-| `src/explore.js` | The daily job: sources, the prompt and schema for Claude, cleaning, and the evergreen fallback list. |
+| `public/categories.js` | Explore's categories, tags, card kinds and colours. Shared by the page and the Worker. |
+| `public/interests.js` | Preferences and ranking, in the browser only: hidden and favoured categories, tags, keywords, the mix, sponsored placement. |
+| `src/explore.js` | The daily job: sources, one Claude call per category, the schema, cleaning, carrying earlier cards, the evergreen list, and sponsored rows. |
 | `public/_headers` | Cache headers: HTML briefly, versioned assets for a year. |
 | `extension/` | Browser extension that opens the page in every new tab. See [New tabs](#new-tabs). |
 | `scripts/extension-icons.js` | Renders `favicon.svg` to the PNG sizes the extension needs. |
@@ -79,8 +83,31 @@ Locally, put the key in `.dev.vars`, run `npm run dev`, and do the same with
 
 The model is `EXPLORE_MODEL` in `wrangler.jsonc` (default `claude-sonnet-5-5`);
 change it and redeploy, or override it for one environment with
-`npx wrangler secret put EXPLORE_MODEL`, or locally in `.dev.vars`. One call a
-day, roughly 2,000 tokens in and 3,000 out. Covers are drawn in the browser, so there are no images to host.
+`npx wrangler secret put EXPLORE_MODEL`, or locally in `.dev.vars`. Eight calls a
+day, one per category, sharing a cached prefix of the day's material: about 80
+new cards a day, plus up to 60 carried from earlier days. Covers are drawn in
+the browser, so there are no images to host. NASA's picture of the day uses
+`DEMO_KEY` unless you set a `NASA_API_KEY` secret; any source that fails is
+skipped for the day.
+
+### Sponsored cards
+
+Rows in the `sponsored` table (`migrations/0004_sponsored.sql`) are served to
+everyone with the day's list; each browser places at most one in about eight
+cards, only where the visitor's own choices allow, labelled with the sponsor.
+Views (once a day per browser) and clicks are counted per card with no
+identifier, and shown on `/admin`. To add one:
+
+```sh
+npx wrangler d1 execute tmea --remote --command "INSERT INTO sponsored
+  (id, sponsor, topic, hook, category, tags, angle, url, starts, ends)
+  VALUES ('acme-stoves', 'Acme', 'Rocket stoves', 'A stove that cooks with a handful of twigs.',
+  'technology', '[\"engineering\",\"food\"]', 'Why does a rocket stove burn so cleanly?',
+  'https://example.com/stoves', '2026-11-01', '2026-11-30')"
+```
+
+Set `active = 0` to pause one. Changes show within 15 minutes (the edge
+cache on `/api/explore`).
 
 ## Deploy
 

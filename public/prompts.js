@@ -3,11 +3,13 @@
 //
 // Everything saves as you type. A new prompt is kept once it has words.
 
-import * as store from './store.js?v=d45deaf580';
-import { ENGINES, engineById } from './engines.js?v=d45deaf580';
-import { describe, AUTO_FILLS, autoValues, fill, defaultLabel, highlight } from './template.js?v=d45deaf580';
-import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=d45deaf580';
-import { CATEGORIES } from './categories.js?v=d45deaf580';
+import * as store from './store.js?v=98030b1b32';
+import { ENGINES, engineById } from './engines.js?v=98030b1b32';
+import { describe, AUTO_FILLS, autoValues, fill, defaultLabel, highlight } from './template.js?v=98030b1b32';
+import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=98030b1b32';
+import { CATEGORIES } from './categories.js?v=98030b1b32';
+import { prefsFrom, tagState, cycleTag } from './interests.js?v=98030b1b32';
+import { forgetLocal } from './explore.js?v=98030b1b32';
 
 const EXAMPLES = [
   { label: 'Compare', template: 'Compare {thing} with {other thing}: how they differ, where each one wins, and which to choose when' },
@@ -26,7 +28,7 @@ const countEl = $('#pp-count');
 const newLink = $('#pp-new');
 const settingsLink = $('#pp-settings');
 const editorEl = $('#editor');
-const settingsEl = $('#settings');
+const settingsEl = $('#settings-panel');
 const headingEl = $('#ed-heading');
 const statusEl = $('#ed-status');
 const tplEl = $('#ed-template');
@@ -457,30 +459,118 @@ function renderSettings() {
   $('#s-theme').value = store.setting('theme', 'system');
   $('#s-explore').checked = store.setting('explore', true) !== false;
   $('#s-recent').checked = store.recentOn();
-  renderInterests();
+  renderExploreSettings();
   renderAccount();
 }
 
-function renderInterests() {
-  const el = $('#s-interests');
-  const want = new Set(store.setting('interests', []));
+function prefs() {
+  return prefsFrom(store.setting);
+}
+
+// Categories: More, Normal or Hide each.
+function renderCats() {
+  const el = $('#s-cats');
+  const p = prefs();
   el.innerHTML = '';
   for (const c of CATEGORIES) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'chip';
-    b.style.setProperty('--h', c.hue);
-    b.setAttribute('aria-pressed', String(want.has(c.id)));
-    b.textContent = c.name;
-    b.addEventListener('click', () => {
-      const next = new Set(store.setting('interests', []));
-      next.has(c.id) ? next.delete(c.id) : next.add(c.id);
-      store.updateSettings({ interests: CATEGORIES.map(x => x.id).filter(id => next.has(id)) });
-      renderInterests();
-    });
-    el.appendChild(b);
+    const row = document.createElement('div');
+    row.className = 'cat-row';
+    row.style.setProperty('--h', c.hue);
+    const name = document.createElement('span');
+    name.className = 'cat-name';
+    name.textContent = c.name;
+    const seg = document.createElement('div');
+    seg.className = 'seg';
+    seg.setAttribute('role', 'radiogroup');
+    seg.setAttribute('aria-label', c.name);
+    const cur = p.catPrefs[c.id] || 'normal';
+    for (const [v, label] of [['more', 'More'], ['normal', 'Normal'], ['hide', 'Hide']]) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('role', 'radio');
+      b.setAttribute('aria-checked', String(cur === v));
+      b.dataset.v = v;
+      b.textContent = label;
+      b.addEventListener('click', () => {
+        const catPrefs = { ...prefs().catPrefs };
+        if (v === 'normal') delete catPrefs[c.id]; else catPrefs[c.id] = v;
+        store.updateSettings({ catPrefs, interests: [] });
+        renderCats();
+      });
+      seg.appendChild(b);
+    }
+    row.append(name, seg);
+    el.appendChild(row);
   }
 }
+
+// Topics: chips that cycle neutral, more, hidden.
+function renderTags() {
+  const el = $('#s-tags');
+  const p = prefs();
+  el.innerHTML = '';
+  for (const c of CATEGORIES) {
+    const g = document.createElement('div');
+    g.className = 'tag-group';
+    const label = document.createElement('span');
+    label.className = 'tag-cat';
+    label.textContent = c.name;
+    label.style.setProperty('--h', c.hue);
+    g.appendChild(label);
+    for (const t of c.tags) {
+      const state = tagState(p, t.id);
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `chip tag-chip ${state}`;
+      b.style.setProperty('--h', c.hue);
+      b.dataset.state = state;
+      b.textContent = t.name;
+      b.title = { neutral: 'Click for more of this', like: 'More of this. Click to hide it', hide: 'Hidden. Click to reset', less: 'Less of this, learned from your feedback. Click to reset' }[state];
+      b.setAttribute('aria-label', `${t.name}: ${{ neutral: 'normal', like: 'more', hide: 'hidden', less: 'less' }[state]}`);
+      b.addEventListener('click', () => {
+        store.updateSettings(cycleTag(prefs(), t.id));
+        renderTags();
+        el.querySelector(`[aria-label^="${CSS.escape(t.name)}:"]`)?.focus();
+      });
+      g.appendChild(b);
+    }
+    el.appendChild(g);
+  }
+}
+
+function renderExploreSettings() {
+  const p = prefs();
+  renderCats();
+  renderTags();
+  const kw = $('#s-keywords');
+  if (document.activeElement !== kw) kw.value = p.keywords;
+  $('#s-timely').value = String(Math.round((1 - p.mix.timely) * 100));
+  $('#s-surprising').value = String(Math.round(p.mix.surprising * 100));
+}
+
+let keywordsTimer = null;
+$('#s-keywords').addEventListener('input', e => {
+  clearTimeout(keywordsTimer);
+  keywordsTimer = setTimeout(() => store.updateSettings({ keywords: e.target.value }), 400);
+});
+// The slider reads left to right as Timely to Timeless; the setting is how
+// much to favour timely cards.
+function saveMix() {
+  store.updateSettings({ mix: { timely: 1 - Number($('#s-timely').value) / 100, surprising: Number($('#s-surprising').value) / 100 } });
+}
+$('#s-timely').addEventListener('change', saveMix);
+$('#s-surprising').addEventListener('change', saveMix);
+$('#s-picker').addEventListener('click', () => {
+  store.updateSettings({ onboarded: false });
+  $('#s-reset-note').textContent = 'The picker will be on the home page.';
+});
+$('#s-reset').addEventListener('click', () => {
+  if (!confirm('Forget what Explore has learned? Topic choices, hidden topics, cards you set aside and the mix go back to the start. Categories and your own interests stay.')) return;
+  store.updateSettings({ tagPrefs: {}, mutedTags: [], mix: {} });
+  forgetLocal();
+  renderExploreSettings();
+  $('#s-reset-note').textContent = 'Done. Explore starts fresh.';
+});
 
 $('#s-engine').addEventListener('change', e => store.updateSettings({ defaultEngine: e.target.value }));
 $('#s-newtab').addEventListener('change', e => store.updateSettings({ newTab: e.target.checked }));

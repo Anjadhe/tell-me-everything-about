@@ -11,3 +11,4 @@ ADMIN_KEY=dev-admin-key
 # "Write today's list now" on /admin (or the cron) writes today's list.
 # ANTHROPIC_API_KEY=sk-ant-...
 # EXPLORE_MODEL=claude-haiku-5-5      # optional; wrangler.jsonc sets the default
+# NASA_API_KEY=...                   # optional; DEMO_KEY otherwise

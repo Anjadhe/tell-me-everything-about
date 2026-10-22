@@ -7,14 +7,14 @@
 <meta name="description" content="Write the prompts your home page finishes for you, with blanks to fill in and details that fill themselves in.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/app.css?v=d45deaf580">
-<link rel="modulepreload" href="/prompts.js?v=d45deaf580">
-<link rel="modulepreload" href="/store.js?v=d45deaf580">
-<link rel="modulepreload" href="/merge.js?v=d45deaf580">
-<link rel="modulepreload" href="/engines.js?v=d45deaf580">
-<link rel="modulepreload" href="/template.js?v=d45deaf580">
-<link rel="modulepreload" href="/sentence.js?v=d45deaf580">
-<link rel="modulepreload" href="/categories.js?v=d45deaf580">
+<link rel="stylesheet" href="/app.css?v=98030b1b32">
+<link rel="modulepreload" href="/prompts.js?v=98030b1b32">
+<link rel="modulepreload" href="/store.js?v=98030b1b32">
+<link rel="modulepreload" href="/merge.js?v=98030b1b32">
+<link rel="modulepreload" href="/engines.js?v=98030b1b32">
+<link rel="modulepreload" href="/template.js?v=98030b1b32">
+<link rel="modulepreload" href="/sentence.js?v=98030b1b32">
+<link rel="modulepreload" href="/categories.js?v=98030b1b32">
 <script>try{var t=localStorage.getItem('tmea:theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body class="page-prompts">
@@ -26,6 +26,7 @@
   </a>
   <nav class="top-actions">
     <span id="sync-dot" class="sync-dot" hidden title="Synced"></span>
+    <a class="quiet" href="/about">About</a>
     <a class="pill solid" href="/" id="done">Done</a>
   </nav>
 </header>
@@ -99,7 +100,7 @@
   </section>
 
   <!-- Settings and account -->
-  <section class="pp-main" id="settings" hidden aria-labelledby="settings-heading">
+  <section class="pp-main" id="settings-panel" hidden aria-labelledby="settings-heading">
     <header class="ed-head"><h2 id="settings-heading">Settings</h2></header>
 
     <section class="set-group">
@@ -129,15 +130,37 @@
         <input type="checkbox" id="s-explore" class="switch">
       </div>
       <div class="setting-block">
-        <span class="setting-label" id="s-interests-label">Topics you like</span>
-        <div id="s-interests" class="chips" role="group" aria-labelledby="s-interests-label"></div>
-        <p class="setting-note">Pick none to see a bit of everything.</p>
+        <span class="setting-label">Categories</span>
+        <div id="s-cats" class="cat-prefs"></div>
+      </div>
+      <div class="setting-block">
+        <span class="setting-label" id="s-tags-label">Topics</span>
+        <p class="setting-note">Click once for more of a topic, twice to hide it, again to reset. Topics marked “less” were learned from your feedback.</p>
+        <div id="s-tags" class="tag-prefs" role="group" aria-labelledby="s-tags-label"></div>
+      </div>
+      <div class="setting-block">
+        <label class="setting-label" for="s-keywords">Your own interests</label>
+        <input type="text" id="s-keywords" class="ed-input wide" maxlength="300" placeholder="Formula 1, sourdough, Rust, Roman history" autocomplete="off">
+        <p class="setting-note">Separate with commas. Matched against each card's words in this browser.</p>
+      </div>
+      <div class="setting-block">
+        <span class="setting-label">Mix</span>
+        <div class="mix">
+          <span>Timely</span><input type="range" id="s-timely" min="0" max="100" step="5" aria-label="Timely or timeless"><span>Timeless</span>
+          <span>Familiar</span><input type="range" id="s-surprising" min="0" max="100" step="5" aria-label="Familiar or surprising"><span>Surprising</span>
+        </div>
       </div>
       <div class="setting">
         <label for="s-recent">Remember my recent topics</label>
         <input type="checkbox" id="s-recent" class="switch">
       </div>
       <p class="setting-note">Kept in this browser only. Never synced and never sent anywhere. Turning it off forgets them.</p>
+      <div class="set-actions">
+        <button type="button" class="pill" id="s-picker">Show the topic picker again</button>
+        <button type="button" class="pill" id="s-reset">Reset what Explore has learned</button>
+        <span class="setting-note" id="s-reset-note" aria-live="polite"></span>
+      </div>
+      <p class="setting-note">All of this stays with your settings. Explore's list is the same for everyone; this browser picks from it for you, and nothing here is sent to Claude or to sponsors.</p>
     </section>
 
     <section class="set-group">
@@ -152,6 +175,6 @@
   <span class="foot-links"><a href="/about">About</a><a href="/">Home</a></span>
 </footer>
 
-<script type="module" src="/prompts.js?v=d45deaf580"></script>
+<script type="module" src="/prompts.js?v=98030b1b32"></script>
 </body>
 </html>

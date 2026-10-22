@@ -7,11 +7,17 @@
 // has more than one blank a topic cannot finish it, so the card fills the
 // first box instead.
 //
+// Which cards, in what order, is decided here in the browser from the
+// visitor's preferences (interests.js?v=98030b1b32). Feedback hides or nudges without
+// reshuffling what is on screen: the order is fixed until the visitor picks
+// another pill, finishes the picker, or comes back later.
+//
 // There are no images. Each card gets a cover drawn from its category (orbits
 // for science, strata for history, …), varied by a seed from the topic so no
 // two look alike, with the card's one striking figure set large on top.
 
-import { categoryById, ORIGINS } from './categories.js?v=d45deaf580';
+import { CATEGORIES, categoryById, tagById, ORIGINS, KINDS, DEPTHS } from './categories.js?v=98030b1b32';
+import { rank, feedback, placeSponsored } from './interests.js?v=98030b1b32';
 
 // Three rows to start (the wide lead card, then three and three); each
 // "Show more" adds two rows under them.
@@ -19,43 +25,87 @@ const FIRST = 8;
 const STEP = 6;
 const DISMISSED_KEY = 'tmea:explore-dismissed';
 const MAX_DISMISSED = 300;
+// Which cards this browser has shown, and on which day, so cards carried
+// from earlier days appear only to browsers that have not had them yet.
+const SEEN_KEY = 'tmea:explore-seen';
+const SEEN_DAYS = 21;
+const VIEWED_KEY = 'tmea:sponsored-viewed';
 
-export function createExplore({ root, link, fill, preview, clearPreview, launched, interests, recent }) {
+export function createExplore({ root, link, fill, preview, clearPreview, launched, prefs, updatePrefs, recent, report, tuneHref = '/prompts#settings' }) {
   const cardsEl = root.querySelector('.cards');
   const recentEl = root.querySelector('.recent');
+  const pillsEl = root.querySelector('.pills');
+  const pickerEl = root.querySelector('.picker');
   const dateEl = root.querySelector('.explore-date');
   const footEl = root.querySelector('.explore-foot');
   const moreBtn = root.querySelector('.explore-more');
+  const menu = document.createElement('div');
+  menu.className = 'menu card-menu';
+  menu.setAttribute('role', 'menu');
+  menu.hidden = true;
+  document.body.appendChild(menu);
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.setAttribute('role', 'status');
+  toast.hidden = true;
+  document.body.appendChild(toast);
+
   let feed = null;
   let count = FIRST;
   let shown = [];
+  let pill = null;        // a category, or null for "For you"
+  let frozen = null;      // card ids in the order first shown
 
-  // Topics the visitor likes come first and the rest follow, so a narrow
-  // choice on a thin day still fills the shelf.
-  function pool() {
+  function ranked(category = pill) {
     if (!feed) return [];
-    const dismissed = readDismissed();
-    const all = feed.cards.filter(c => !dismissed.has(c.id));
-    const want = new Set(interests());
-    if (!want.size) return all;
-    return [...all.filter(c => want.has(c.category)), ...all.filter(c => !want.has(c.category))];
+    return rank(feed.cards, prefs(), { dismissed: readDismissed(), seenBefore: seenBefore(feed.day), category });
   }
 
-  let lastInterests = '';
+  // The ranked list in the order already on screen: cards that are now hidden
+  // drop out and the gap closes, newly eligible ones join at the end.
+  function ordered() {
+    const fresh = ranked();
+    if (!frozen) { frozen = fresh.map(c => c.id); return fresh; }
+    const byId = new Map(fresh.map(c => [c.id, c]));
+    const kept = frozen.filter(id => byId.has(id)).map(id => byId.get(id));
+    const known = new Set(frozen);
+    const added = fresh.filter(c => !known.has(c.id));
+    frozen = [...frozen, ...added.map(c => c.id)];
+    return [...kept, ...added];
+  }
+
+  function refresh() {
+    frozen = null;
+    count = FIRST;
+    render();
+  }
+
   function render() {
     renderRecent();
+    renderPicker();
     if (!feed) { renderSkeleton(); return; }
-    const key = interests().join();
-    if (key !== lastInterests) { lastInterests = key; count = FIRST; }
-    const list = pool();
+    renderPills();
+    const list = placeSponsored(ordered(), feed.sponsored || [], prefs(), { dismissed: readDismissed(), category: pill });
     shown = list.slice(0, count);
     cardsEl.innerHTML = '';
     cardsEl.removeAttribute('aria-busy');
     shown.forEach((c, i) => cardsEl.appendChild(cardEl(c, i === 0)));
+    if (!shown.length) {
+      const empty = document.createElement('p');
+      empty.className = 'explore-empty';
+      empty.append('Nothing here with your current choices. ');
+      const a = document.createElement('a');
+      a.href = tuneHref;
+      a.textContent = 'Change what Explore shows';
+      empty.append(a, '.');
+      cardsEl.appendChild(empty);
+    }
+    markSeen(shown.filter(c => !c.sponsored), feed.day);
+    for (const c of shown) if (c.sponsored) reportOnce(c.id, feed.day);
     moreBtn.hidden = list.length <= shown.length;
     dateEl.textContent = feed.source === 'daily' ? formatDay(feed.day) : '';
     footEl.textContent = feed.source === 'daily'
-      ? 'Chosen this morning by Claude from Wikipedia and Hacker News. Each card opens with the prompt you have selected above.'
+      ? "Chosen this morning by Claude from Wikipedia, Hacker News, Reddit's Today I Learned and sources for each category, then ordered for you in this browser. Each card opens with the prompt you have selected above."
       : 'A few timeless places to start. Each card opens with the prompt you have selected above.';
   }
 
@@ -68,7 +118,96 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
       s.innerHTML = '<div class="cover"></div><div class="card-body"><span class="bar w40"></span><span class="bar w80"></span><span class="bar w60"></span></div>';
       cardsEl.appendChild(s);
     }
+    pillsEl.hidden = true;
     moreBtn.hidden = true;
+  }
+
+  // "For you", then each category that has something to show.
+  function renderPills() {
+    const p = prefs();
+    const all = ranked(null);
+    const cats = CATEGORIES.filter(c => p.catPrefs[c.id] !== 'hide' && all.some(x => x.category === c.id));
+    if (pill && !cats.some(c => c.id === pill)) pill = null;
+    pillsEl.hidden = false;
+    pillsEl.innerHTML = '';
+    const make = (id, name, hue) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'topic-pill';
+      b.textContent = name;
+      if (hue !== undefined) b.style.setProperty('--h', hue);
+      b.setAttribute('aria-pressed', String(pill === id));
+      b.addEventListener('click', () => {
+        if (pill === id) return;
+        pill = id;
+        refresh();
+      });
+      pillsEl.appendChild(b);
+    };
+    make(null, 'For you');
+    for (const c of cats) make(c.id, c.name, c.hue);
+    const tune = document.createElement('a');
+    tune.className = 'pill-tune';
+    tune.href = tuneHref;
+    tune.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Tune';
+    pillsEl.appendChild(tune);
+  }
+
+  // The first time: a row of topics to lean toward. Done or Skip, it goes.
+  function renderPicker() {
+    const p = prefs();
+    pickerEl.hidden = p.onboarded;
+    if (p.onboarded) return;
+    if (!pickerEl.childElementCount) {
+      pickerEl.innerHTML = `
+        <div class="picker-head">
+          <div>
+            <h3 class="picker-title">What are you curious about?</h3>
+            <p class="picker-sub">Pick a few and Explore leans toward them. Everything is kept in your settings, never sent to anyone.</p>
+          </div>
+          <div class="picker-actions">
+            <button type="button" class="quiet picker-skip">Skip</button>
+            <button type="button" class="pill solid picker-done">Done</button>
+          </div>
+        </div>
+        <div class="picker-groups"></div>`;
+      pickerEl.querySelector('.picker-skip').addEventListener('click', finishPicker);
+      pickerEl.querySelector('.picker-done').addEventListener('click', finishPicker);
+    }
+    const groups = pickerEl.querySelector('.picker-groups');
+    groups.innerHTML = '';
+    for (const c of CATEGORIES) {
+      const g = document.createElement('div');
+      g.className = 'picker-group';
+      g.style.setProperty('--h', c.hue);
+      const label = document.createElement('span');
+      label.className = 'picker-cat';
+      label.textContent = c.name;
+      g.appendChild(label);
+      for (const t of c.tags) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'chip';
+        b.style.setProperty('--h', c.hue);
+        b.textContent = t.name;
+        b.setAttribute('aria-pressed', String((p.tagPrefs[t.id] || 0) > 0));
+        b.addEventListener('click', () => {
+          const cur = prefs();
+          const tagPrefs = { ...cur.tagPrefs };
+          if ((tagPrefs[t.id] || 0) > 0) delete tagPrefs[t.id]; else tagPrefs[t.id] = 2;
+          updatePrefs({ tagPrefs });
+          b.setAttribute('aria-pressed', String(!!tagPrefs[t.id]));
+        });
+        g.appendChild(b);
+      }
+      groups.appendChild(g);
+    }
+  }
+
+  function finishPicker() {
+    updatePrefs({ onboarded: true });
+    pickerEl.hidden = true;
+    refresh();
   }
 
   function renderRecent() {
@@ -94,7 +233,7 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
   function cardEl(c, feature) {
     const cat = categoryById(c.category);
     const el = document.createElement('article');
-    el.className = 'card' + (feature ? ' feature' : '');
+    el.className = 'card' + (feature ? ' feature' : '') + (c.sponsored ? ' sponsored' : '');
     el.style.setProperty('--h', cat.hue);
     el.dataset.id = c.id;
 
@@ -108,6 +247,12 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     cover.className = 'cover' + (c.figure ? ' has-figure' : '');
     cover.setAttribute('aria-hidden', 'true');
     cover.innerHTML = motif(c.category, c.topic);
+    if (c.depth === 'deep') {
+      const d = document.createElement('span');
+      d.className = 'depth';
+      d.textContent = DEPTHS.deep;
+      cover.appendChild(d);
+    }
     if (c.figure) {
       const fig = document.createElement('div');
       fig.className = 'figure';
@@ -128,7 +273,8 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     body.className = 'card-body';
     const kicker = document.createElement('span');
     kicker.className = 'kicker';
-    kicker.textContent = cat.name + (ORIGINS[c.origin] && c.origin !== 'timeless' ? ` · ${ORIGINS[c.origin]}` : '');
+    const second = KINDS[c.kind] || (c.origin !== 'timeless' ? ORIGINS[c.origin] : '');
+    kicker.textContent = c.sponsored ? `Sponsored · ${c.sponsor}` : cat.name + (second ? ` · ${second}` : '');
     const title = document.createElement('h3');
     title.className = 'card-title';
     title.textContent = c.topic;
@@ -151,14 +297,27 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
       aim(q);
       foot.appendChild(q);
     }
-    const x = document.createElement('button');
-    x.type = 'button';
-    x.className = 'dismiss';
-    x.title = 'Not interested';
-    x.setAttribute('aria-label', `Not interested in ${c.topic}`);
-    x.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
-    x.addEventListener('click', () => dismiss(c.id, el));
-    foot.appendChild(x);
+    // A sponsor's own page, when it has one: a plain link, nothing added to it.
+    if (c.sponsored && c.url) {
+      const v = document.createElement('a');
+      v.className = 'visit';
+      v.href = c.url;
+      v.target = '_blank';
+      v.rel = 'sponsored noopener noreferrer';
+      v.textContent = `Visit ${c.sponsor} ↗`;
+      v.addEventListener('click', () => report?.(c.id, 'click'));
+      foot.appendChild(v);
+    }
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'card-more';
+    more.title = 'More or less like this';
+    more.setAttribute('aria-label', `Options for ${c.topic}`);
+    more.setAttribute('aria-haspopup', 'menu');
+    more.setAttribute('aria-expanded', 'false');
+    more.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
+    more.addEventListener('click', e => { e.stopPropagation(); menu.hidden || menuFor !== c.id ? openMenu(c, more) : closeMenu(); });
+    foot.appendChild(more);
     el.appendChild(foot);
     return el;
   }
@@ -170,14 +329,152 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     if (target && !fills) { a.target = target; a.rel = 'noopener'; } else { a.removeAttribute('target'); a.removeAttribute('rel'); }
   }
 
-  function dismiss(id, el) {
-    const d = readDismissed();
-    d.add(id);
-    writeDismissed(d);
-    clearPreview();
-    el.classList.add('leaving');
-    setTimeout(render, matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 180);
+  // ---------- feedback ----------
+
+  let menuFor = null;
+  let menuButton = null;
+
+  function openMenu(c, button) {
+    closeMenu();
+    menuFor = c.id;
+    menuButton = button;
+    button.setAttribute('aria-expanded', 'true');
+    menu.innerHTML = '';
+    const cat = categoryById(c.category);
+    const tags = (c.tags || []).map(tagById).filter(Boolean);
+    const item = (label, run, cls = '') => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('role', 'menuitem');
+      b.className = cls;
+      b.innerHTML = '<span class="name"></span>';
+      b.querySelector('.name').textContent = label;
+      b.addEventListener('click', () => { closeMenu(); run(); });
+      menu.appendChild(b);
+    };
+    const sep = () => { const d = document.createElement('div'); d.className = 'menu-sep'; menu.appendChild(d); };
+    if (c.sponsored) {
+      item('Not interested in this one', () => dismissCard(c, 'Set aside.'));
+      item('Why am I seeing this?', () => say(`Sponsored by ${c.sponsor}. This browser picked it because it fits the topics you follow; nothing about you was sent to us or to ${c.sponsor}.`));
+      placeMenu(button);
+      return;
+    }
+    item('More like this', () => moreLike(c));
+    item('Less like this', () => lessLike(c));
+    item('Not interested in this one', () => dismissCard(c, 'Set aside.'));
+    sep();
+    for (const t of tags) item(`Hide all ${t.name.toLowerCase()} topics`, () => muteTag(t));
+    item(`Hide ${cat.name}`, () => hideCategory(cat));
+    sep();
+    const a = document.createElement('a');
+    a.href = tuneHref;
+    a.setAttribute('role', 'menuitem');
+    a.className = 'menu-link';
+    a.textContent = 'Tune Explore…';
+    menu.appendChild(a);
+    placeMenu(button);
   }
+
+  function placeMenu(button) {
+    const r = button.getBoundingClientRect();
+    menu.hidden = false;
+    const w = menu.offsetWidth;
+    menu.style.left = `${Math.max(8, Math.min(window.scrollX + r.right - w, window.scrollX + document.documentElement.clientWidth - w - 8))}px`;
+    menu.style.top = `${window.scrollY + r.bottom + 6}px`;
+    menu.querySelector('button')?.focus();
+    setTimeout(() => document.addEventListener('click', outside), 0);
+  }
+
+  function closeMenu() {
+    if (menu.hidden) return;
+    menu.hidden = true;
+    menuButton?.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('click', outside);
+    menuFor = null;
+  }
+  function outside(e) {
+    if (!menu.contains(e.target)) closeMenu();
+  }
+  menu.addEventListener('keydown', e => {
+    const items = [...menu.querySelectorAll('[role="menuitem"]')];
+    const i = items.indexOf(document.activeElement);
+    if (e.key === 'Escape') { e.preventDefault(); const b = menuButton; closeMenu(); b?.focus(); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length]?.focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length]?.focus(); }
+  });
+
+  function moreLike(c) {
+    const before = prefs();
+    if (c.tags?.length) updatePrefs({ tagPrefs: feedback(before, c, 'more') });
+    else updatePrefs({ catPrefs: { ...before.catPrefs, [c.category]: 'more' } });
+    say(`Noted. More like “${c.topic}” from now on.`, () => updatePrefs({ tagPrefs: before.tagPrefs, catPrefs: before.catPrefs }));
+  }
+
+  function lessLike(c) {
+    const before = prefs();
+    if (c.tags?.length) updatePrefs({ tagPrefs: feedback(before, c, 'less') });
+    dismissCard(c, 'Noted. Fewer like this.', () => updatePrefs({ tagPrefs: before.tagPrefs }));
+  }
+
+  function dismissCard(c, message, alsoUndo) {
+    const d = readDismissed();
+    d.add(c.id);
+    writeDismissed(d);
+    leave(() => cardsEl.querySelector(`[data-id="${CSS.escape(c.id)}"]`));
+    say(message, () => {
+      const u = readDismissed();
+      u.delete(c.id);
+      writeDismissed(u);
+      alsoUndo?.();
+      render();
+    });
+  }
+
+  function muteTag(t) {
+    const before = prefs();
+    updatePrefs({ mutedTags: [...new Set([...before.mutedTags, t.id])] });
+    leave(() => [...cardsEl.querySelectorAll('.card')].filter(el => feed.cards.find(x => x.id === el.dataset.id)?.tags?.includes(t.id)));
+    say(`Hiding ${t.name.toLowerCase()} topics.`, () => { updatePrefs({ mutedTags: before.mutedTags }); render(); });
+  }
+
+  function hideCategory(cat) {
+    const before = prefs();
+    updatePrefs({ catPrefs: { ...before.catPrefs, [cat.id]: 'hide' } });
+    leave(() => [...cardsEl.querySelectorAll('.card')].filter(el => feed.cards.find(x => x.id === el.dataset.id)?.category === cat.id));
+    say(`Hiding ${cat.name}.`, () => { updatePrefs({ catPrefs: before.catPrefs }); render(); });
+  }
+
+  // Fade out what is going, then close the gaps.
+  function leave(pick) {
+    clearPreview();
+    const els = [].concat(pick() || []);
+    for (const el of els) el.classList.add('leaving');
+    setTimeout(render, matchMedia('(prefers-reduced-motion: reduce)').matches || !els.length ? 0 : 180);
+  }
+
+  let toastTimer = null;
+  function say(message, undo) {
+    clearTimeout(toastTimer);
+    toast.innerHTML = '<span class="toast-text"></span>';
+    toast.querySelector('.toast-text').textContent = message;
+    if (undo) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'toast-undo';
+      b.textContent = 'Undo';
+      b.addEventListener('click', () => { undo(); hideToast(); });
+      toast.appendChild(b);
+    }
+    toast.hidden = false;
+    toast.classList.remove('out');
+    toastTimer = setTimeout(hideToast, 6000);
+  }
+  function hideToast() {
+    toast.classList.add('out');
+    setTimeout(() => { toast.hidden = true; }, 200);
+  }
+
+  // ---------- previews and launching ----------
 
   // Preview: hovering or focusing anything aimable writes it into the sentence.
   let previewing = null;
@@ -202,6 +499,8 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
   root.addEventListener('click', e => {
     const a = e.target.closest('a[data-kind]');
     if (!a) return;
+    const card = a.closest('.card.sponsored');
+    if (card) report?.(card.dataset.id, 'click');
     if (a.hasAttribute('data-fill')) { e.preventDefault(); fill(a.dataset.topic || a.dataset.text); return; }
     launched(a.dataset.kind, a.dataset.topic || a.dataset.text, e);
   });
@@ -221,13 +520,26 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     added[0]?.scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   });
 
+  // A sponsored card's view is counted once a day per browser, by card only.
+  function reportOnce(id, day) {
+    let viewed = {};
+    try { viewed = JSON.parse(localStorage.getItem(VIEWED_KEY) || '{}') || {}; } catch { /* ignore */ }
+    if (viewed[id] === day) return;
+    for (const k of Object.keys(viewed)) if (viewed[k] !== day) delete viewed[k];
+    viewed[id] = day;
+    try { localStorage.setItem(VIEWED_KEY, JSON.stringify(viewed)); } catch { /* ignore */ }
+    report?.(id, 'view');
+  }
+
   return {
     setFeed(next) {
-      const changed = !feed || next.day !== feed.day || next.cards.length !== feed.cards.length || next.cards.some((c, i) => c.id !== feed.cards[i]?.id);
+      const changed = !feed || next.day !== feed.day || next.cards.length !== feed.cards.length || next.cards.some((c, i) => c.id !== feed.cards[i]?.id) || (next.sponsored || []).map(c => c.id).join() !== (feed.sponsored || []).map(c => c.id).join();
       feed = next;
-      if (changed) { count = FIRST; render(); }
+      if (changed) refresh();
     },
     render,
+    // Preferences changed somewhere else (settings page, another browser).
+    refresh,
     // Re-aim every link after the prompt or engine changes, without rebuilding.
     reaim() { root.querySelectorAll('a[data-kind]').forEach(aim); },
     topics: () => shown.map(c => c.topic),
@@ -240,6 +552,27 @@ function readDismissed() {
 }
 function writeDismissed(set) {
   try { localStorage.setItem(DISMISSED_KEY, JSON.stringify([...set].slice(-MAX_DISMISSED))); } catch { /* private mode */ }
+}
+
+function readSeen() {
+  try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '{}') || {}; } catch { return {}; }
+}
+function seenBefore(day) {
+  const seen = readSeen();
+  return new Set(Object.keys(seen).filter(id => seen[id] < day));
+}
+function markSeen(cards, day) {
+  const seen = readSeen();
+  const cutoff = new Date(Date.parse(`${day}T00:00:00Z`) - SEEN_DAYS * 86400_000).toISOString().slice(0, 10);
+  let changed = false;
+  for (const id of Object.keys(seen)) if (seen[id] < cutoff) { delete seen[id]; changed = true; }
+  for (const c of cards) if (!seen[c.id]) { seen[c.id] = day; changed = true; }
+  if (changed) try { localStorage.setItem(SEEN_KEY, JSON.stringify(seen)); } catch { /* private mode */ }
+}
+
+// Forget what this browser set aside and has seen (settings: reset).
+export function forgetLocal() {
+  try { localStorage.removeItem(DISMISSED_KEY); localStorage.removeItem(SEEN_KEY); } catch { /* ignore */ }
 }
 
 function formatDay(day) {

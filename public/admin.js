@@ -151,9 +151,10 @@ function render() {
   bars($('#engines'), engines, k => ENGINE_NAMES[k] || k);
   const FROM_NAMES = { typed: 'Typed in the box', card: 'Explore card', angle: 'Explore question', recent: 'Recent topic' };
   bars($('#froms'), Object.entries(data.launchFrom || {}).sort((a, b) => b[1] - a[1]), k => FROM_NAMES[k] || k);
+  bars($('#sponsored'), Object.entries(data.sponsored || {}).sort((a, b) => b[1].views - a[1].views).map(([k, v]) => [`${k.replace(/^sp-/, '')} · ${v.clicks} click${v.clicks === 1 ? '' : 's'}`, v.views]));
   const ex = data.explore;
   $('#explore-status').textContent = ex
-    ? `Latest list: ${ex.day}, ${ex.cards} cards${ex.model ? ` by ${ex.model}` : ''}, written ${new Date(ex.createdAt).toLocaleString()}.`
+    ? `Latest list: ${ex.day}, ${ex.cards} new cards${ex.carried ? ` and ${ex.carried} carried from earlier days` : ''}${ex.model ? ` by ${ex.model}` : ''}, written ${new Date(ex.createdAt).toLocaleString()}.${ex.byCategory ? ` By category: ${Object.entries(ex.byCategory).map(([k, n]) => `${k} ${n}`).join(', ')}.` : ''}`
     : 'No daily list yet; the page shows the evergreen one.';
 
   const uas = sumBy(rows, 'ua').slice(0, 25);
