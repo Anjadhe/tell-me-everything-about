@@ -65,6 +65,7 @@ async function route(request, env, ctx, url) {
   if (pathname === '/api/account' && method === 'DELETE') return deleteAccount(request, env);
   if (pathname === '/api/launch' && method === 'POST') return countLaunch(request, env, ctx);
   if (pathname === '/api/admin/usage' && method === 'GET') return adminUsage(request, env);
+  if (pathname === '/api/admin/traffic' && method === 'GET') return adminTraffic(request, env);
   if (pathname === '/api/explore' && method === 'GET') return getExplore(request, env, ctx);
   if (pathname === '/api/admin/explore' && method === 'POST') return adminExplore(request, env);
   if (pathname === '/api/sponsored' && method === 'POST') return countSponsored(request, env, ctx);
@@ -268,7 +269,6 @@ async function adminUsage(request, env) {
     ? { day: latest.day, createdAt: latest.created_at, ...pick(JSON.parse(latest.data)) }
     : null;
 
-  const traffic = await edgeTraffic(env, days);
   function pick(feed) {
     const fresh = feed.cards.filter(c => !c.carried);
     const byCategory = {};
@@ -287,15 +287,41 @@ async function adminUsage(request, env) {
     sponsored,
     interests: interests.results,
     explore: exploreInfo,
-    traffic,
   });
+}
+
+// Edge traffic on its own call, so the dashboard can show everything else
+// first. Days that are over come from traffic_days; only the rest are asked
+// of Cloudflare, and a day is kept once it has been over for two hours (the
+// analytics settle by then).
+async function adminTraffic(request, env) {
+  const refused = await adminRefusal(request, env);
+  if (refused) return refused;
+  if (!env.CF_ANALYTICS_TOKEN || !env.CF_ZONE_TAG) return json({ available: false, reason: 'CF_ANALYTICS_TOKEN or CF_ZONE_TAG is not set.' });
+  const days = lastDays(14);
+  const kept = await env.DB.prepare(`SELECT day, data FROM traffic_days WHERE day IN (${days.map(() => '?').join(',')})`).bind(...days).all();
+  const byDay = {};
+  for (const r of kept.results) { try { byDay[r.day] = JSON.parse(r.data); } catch { /* fetch again */ } }
+  const missing = days.filter(d => !byDay[d]);
+  const fetched = await edgeTraffic(env, missing);
+  const settled = Date.now() - 2 * 3600_000;
+  const writes = [];
+  for (const d of missing) {
+    byDay[d] = fetched[d];
+    const over = Date.parse(`${d}T00:00:00Z`) + 86400_000 < settled;
+    if (over && fetched[d] && !fetched[d].error) {
+      writes.push(env.DB.prepare('INSERT OR REPLACE INTO traffic_days (day, data, fetched_at) VALUES (?, ?, ?)').bind(d, JSON.stringify(fetched[d]), new Date().toISOString()));
+    }
+  }
+  if (writes.length) await env.DB.batch(writes);
+  await env.DB.prepare('DELETE FROM traffic_days WHERE day < ?').bind(days[0]).run();
+  return json({ available: true, byDay, asked: missing.length });
 }
 
 // Cloudflare's edge analytics, one day per query (the free plan caps a query
 // at one day). Every row comes back, tagged by usage.js; the page filters.
 // Needs CF_ANALYTICS_TOKEN (Analytics: Read on the zone) and CF_ZONE_TAG.
 async function edgeTraffic(env, days) {
-  if (!env.CF_ANALYTICS_TOKEN || !env.CF_ZONE_TAG) return { available: false, reason: 'CF_ANALYTICS_TOKEN or CF_ZONE_TAG is not set.' };
   const query = `query($zone:String!,$from:Time!,$to:Time!){ viewer { zones(filter:{zoneTag:$zone}) {
     rows: httpRequestsAdaptiveGroups(limit:2000, filter:{datetime_geq:$from, datetime_lt:$to}) {
       count dimensions { userAgent clientRequestPath clientCountryName } } } } }`;
@@ -318,7 +344,7 @@ async function edgeTraffic(env, days) {
     }
   }));
   for (const [day, v] of results) out[day] = v;
-  return { available: true, byDay: out };
+  return out;
 }
 
 // ---------- explore ----------

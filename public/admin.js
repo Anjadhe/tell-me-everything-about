@@ -29,12 +29,32 @@ async function load() {
   if (res.status === 401) { setKey(''); return showGate('That key was not accepted.'); }
   if (!res.ok) return showGate(body.error || `The Worker answered ${res.status}.`);
   data = body;
+  // Everything but edge traffic is here already; traffic follows.
+  data.traffic = { available: false, loading: true };
   $('#generated').textContent = `As of ${new Date(data.generatedAt).toLocaleString()} · days in UTC`;
   fillFilterOptions();
   restoreFilters();
   render();
   $('#gate').hidden = true; $('#dash').hidden = false;
   $('#refresh').hidden = false; $('#lock').hidden = false;
+  loadTraffic(key);
+}
+
+async function loadTraffic(key) {
+  const asOf = data.generatedAt;
+  let traffic;
+  try {
+    const res = await fetch('/api/admin/traffic', { headers: { 'x-admin-key': key } });
+    traffic = await res.json();
+    if (!res.ok) traffic = { available: false, reason: traffic.error || `The Worker answered ${res.status}.` };
+  } catch (err) {
+    traffic = { available: false, reason: err.message };
+  }
+  if (data?.generatedAt !== asOf) return;   // a newer load has started
+  data.traffic = traffic;
+  fillFilterOptions();
+  restoreFilters();
+  render();
 }
 
 // ---------- filters ----------
@@ -124,7 +144,7 @@ function render() {
   for (const r of rows) byDay[r.day] += r.n;
 
   const shown = total(rows), all = total(everything);
-  $('#showing').innerHTML = t.available ? `Showing <b>${shown}</b> of <b>${all}</b> requests` : 'Edge analytics not connected';
+  $('#showing').innerHTML = t.loading ? 'Loading edge traffic…' : t.available ? `Showing <b>${shown}</b> of <b>${all}</b> requests` : 'Edge analytics not connected';
   const launches = days.reduce((a, d) => a + (data.launchByDay[d] || 0), 0);
   const signins = days.reduce((a, d) => a + (data.signinByDay[d] || 0), 0);
   const tiles = [
@@ -142,7 +162,7 @@ function render() {
   }).join('');
   $('#xlabels').innerHTML = days.map((d, i) => `<span>${i % 2 === 0 || days.length <= 7 ? fmtDay(d) : ''}</span>`).join('');
   const errs = days.filter(d => t.byDay?.[d]?.error);
-  $('#traffic-note').textContent = !t.available ? `Edge analytics are not connected: ${t.reason || ''}` : errs.length ? `Cloudflare returned an error for ${errs.length} day(s): ${t.byDay[errs[0]].error}` : '';
+  $('#traffic-note').textContent = t.loading ? 'Loading edge traffic from Cloudflare…' : !t.available ? `Edge analytics are not connected: ${t.reason || ''}` : errs.length ? `Cloudflare returned an error for ${errs.length} day(s): ${t.byDay[errs[0]].error}` : '';
 
   bars($('#paths'), sumBy(rows, 'path'));
   bars($('#countries'), sumBy(rows, 'country'), regionName);
