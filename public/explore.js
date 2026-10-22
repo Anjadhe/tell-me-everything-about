@@ -11,9 +11,12 @@
 // for science, strata for history, …), varied by a seed from the topic so no
 // two look alike, with the card's one striking figure set large on top.
 
-import { categoryById, ORIGINS } from './categories.js?v=c4d4666288';
+import { categoryById, ORIGINS } from './categories.js?v=d45deaf580';
 
-const PAGE = 5;
+// Three rows to start (the wide lead card, then three and three); each
+// "Show more" adds two rows under them.
+const FIRST = 8;
+const STEP = 6;
 const DISMISSED_KEY = 'tmea:explore-dismissed';
 const MAX_DISMISSED = 300;
 
@@ -24,7 +27,7 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
   const footEl = root.querySelector('.explore-foot');
   const moreBtn = root.querySelector('.explore-more');
   let feed = null;
-  let offset = 0;
+  let count = FIRST;
   let shown = [];
 
   // Topics the visitor likes come first and the rest follow, so a narrow
@@ -43,14 +46,13 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     renderRecent();
     if (!feed) { renderSkeleton(); return; }
     const key = interests().join();
-    if (key !== lastInterests) { lastInterests = key; offset = 0; }
+    if (key !== lastInterests) { lastInterests = key; count = FIRST; }
     const list = pool();
-    if (offset >= list.length) offset = 0;
-    shown = [...list.slice(offset, offset + PAGE), ...list.slice(0, Math.max(0, offset + PAGE - list.length))].slice(0, Math.min(PAGE, list.length));
+    shown = list.slice(0, count);
     cardsEl.innerHTML = '';
     cardsEl.removeAttribute('aria-busy');
     shown.forEach((c, i) => cardsEl.appendChild(cardEl(c, i === 0)));
-    moreBtn.hidden = list.length <= PAGE;
+    moreBtn.hidden = list.length <= shown.length;
     dateEl.textContent = feed.source === 'daily' ? formatDay(feed.day) : '';
     footEl.textContent = feed.source === 'daily'
       ? 'Chosen this morning by Claude from Wikipedia and Hacker News. Each card opens with the prompt you have selected above.'
@@ -60,7 +62,7 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
   function renderSkeleton() {
     cardsEl.innerHTML = '';
     cardsEl.setAttribute('aria-busy', 'true');
-    for (let i = 0; i < PAGE; i++) {
+    for (let i = 0; i < FIRST; i++) {
       const s = document.createElement('div');
       s.className = 'card skeleton' + (i === 0 ? ' feature' : '');
       s.innerHTML = '<div class="cover"></div><div class="card-body"><span class="bar w40"></span><span class="bar w80"></span><span class="bar w60"></span></div>';
@@ -208,17 +210,22 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     if (a && e.button === 1 && !a.hasAttribute('data-fill')) launched(a.dataset.kind, a.dataset.topic || a.dataset.text, e);
   });
 
+  // Adds cards under the ones already there; nothing above moves.
   moreBtn.addEventListener('click', () => {
-    offset += PAGE;
+    const before = shown.length;
+    count = before + STEP;
     render();
-    cardsEl.querySelector('.card-link')?.focus({ preventScroll: true });
+    const added = [...cardsEl.children].slice(before);
+    added.forEach((el, i) => { el.classList.add('arriving'); el.style.animationDelay = `${i * 40}ms`; });
+    added[0]?.querySelector('.card-link')?.focus({ preventScroll: true });
+    added[0]?.scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   });
 
   return {
     setFeed(next) {
       const changed = !feed || next.day !== feed.day || next.cards.length !== feed.cards.length || next.cards.some((c, i) => c.id !== feed.cards[i]?.id);
       feed = next;
-      if (changed) { offset = 0; render(); }
+      if (changed) { count = FIRST; render(); }
     },
     render,
     // Re-aim every link after the prompt or engine changes, without rebuilding.

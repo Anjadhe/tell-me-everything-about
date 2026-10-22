@@ -1,15 +1,15 @@
 // Tell me everything about — the home page: a sentence to finish.
 //
-// State, sync and the account live in store.js?v=c4d4666288, shared with the prompts
+// State, sync and the account live in store.js?v=d45deaf580, shared with the prompts
 // page (/prompts) where prompts are written and settings are kept. This page
 // draws the selected prompt as a sentence with a box for each blank, launches
 // it, and shows Explore under it.
 
-import * as store from './store.js?v=c4d4666288';
-import { ENGINES, engineById } from './engines.js?v=c4d4666288';
-import { parse, fill, defaultLabel } from './template.js?v=c4d4666288';
-import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=c4d4666288';
-import { createExplore } from './explore.js?v=c4d4666288';
+import * as store from './store.js?v=d45deaf580';
+import { ENGINES, engineById } from './engines.js?v=d45deaf580';
+import { parse, fill, defaultLabel } from './template.js?v=d45deaf580';
+import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=d45deaf580';
+import { createExplore } from './explore.js?v=d45deaf580';
 
 const FEED_KEY = 'tmea:explore-feed';
 const FEED_FRESH_MS = 30 * 60 * 1000;
@@ -353,7 +353,7 @@ async function loadFeed() {
 
 // Hovering a card writes it into the first box, or a card's question in
 // place of the sentence, so you see exactly what will be asked. The stage
-// keeps its height (app.css?v=c4d4666288), so nothing below moves.
+// keeps its height (app.css?v=d45deaf580), so nothing below moves.
 function preview(kind, text) {
   previewing = kind;
   const slot = inputs[0]?.parentElement;

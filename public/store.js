@@ -7,7 +7,7 @@
 // clobbering the other. Two tabs of this site stay in step through the
 // storage event, and a page restored from the back-forward cache re-reads.
 
-import { merge, emptyState, normalize, sameState, MAX_PROMPTS } from './merge.js?v=c4d4666288';
+import { merge, emptyState, normalize, sameState, MAX_PROMPTS } from './merge.js?v=d45deaf580';
 
 export { MAX_PROMPTS };
 
