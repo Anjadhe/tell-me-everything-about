@@ -1,14 +1,17 @@
-// The prompts page (/prompts): write prompts, and keep settings and the
-// account. #<id> edits a prompt, #new starts one, #settings shows the rest.
+// The settings page (/settings): one list of grouped rows, and a page for
+// each row with ›. #prompts lists the prompts, #<id> edits one, #new starts
+// one, #saved shows saved cards, #engine, #appearance, #topics and #account
+// are the rest; no hash is the list itself. (/prompts redirects here, and
+// its old #settings/<name> addresses still work.)
 //
 // Everything saves as you type. A new prompt is kept once it has words.
 
-import * as store from './store.js?v=5e11922ad2';
-import { ENGINES, engineById } from './engines.js?v=5e11922ad2';
-import { describe, AUTO_FILLS, autoValues, fill, defaultLabel, highlight, parse } from './template.js?v=5e11922ad2';
-import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=5e11922ad2';
-import { CATEGORIES, categoryById, KINDS } from './categories.js?v=5e11922ad2';
-import { prefsFrom, topicsValue, setCategory, setTag, DEFAULT_TOPICS } from './interests.js?v=5e11922ad2';
+import * as store from './store.js?v=3b3d0ea256';
+import { ENGINES, engineById } from './engines.js?v=3b3d0ea256';
+import { describe, AUTO_FILLS, autoValues, fill, defaultLabel, highlight, parse } from './template.js?v=3b3d0ea256';
+import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=3b3d0ea256';
+import { CATEGORIES, categoryById, KINDS } from './categories.js?v=3b3d0ea256';
+import { prefsFrom, topicsValue, setCategory, setTag, DEFAULT_TOPICS } from './interests.js?v=3b3d0ea256';
 
 const EXAMPLES = [
   { label: 'Compare', template: 'Compare {thing} with {other thing}: how they differ, where each one wins, and which to choose when' },
@@ -22,10 +25,8 @@ const EXAMPLES = [
 const BLANK_NAMES = ['topic', 'thing', 'other thing', 'place', 'person', 'detail'];
 
 const $ = s => document.querySelector(s);
-const listEl = $('#pp-list');
-const countEl = $('#pp-count');
-const newLink = $('#pp-new');
-const settingsLink = $('#pp-settings');
+const listEl = $('#prompt-list');
+const promptsEl = $('#prompts-panel');
 const editorEl = $('#editor');
 const settingsEl = $('#settings-panel');
 const savedEl = $('#saved-panel');
@@ -52,18 +53,24 @@ let statusTimer = null;
 // ---------- routing ----------
 
 function route() {
-  const h = decodeURIComponent(location.hash.slice(1));
-  if (h === 'settings' || h.startsWith('settings/')) return showSettings(h.slice(9));
+  const h = decodeURIComponent(location.hash.slice(1)).replace(/^settings\/?/, '');
+  if (!h) return showSettings('');
+  if (DETAILS[h]) return showSettings(h);
   if (h === 'saved') return showSaved();
-  const list = store.prompts();
+  if (h === 'prompts') return showPrompts();
   if (h === 'new') {
-    if (list.length >= store.MAX_PROMPTS) { history.replaceState(null, '', `#${list[0].id}`); return showEditor(list[0].id); }
+    if (store.prompts().length >= store.MAX_PROMPTS) { history.replaceState(null, '', '#prompts'); return showPrompts(); }
     return showEditor(null);
   }
-  const p = store.promptById(h) || list[0];
-  if (!p) return showEditor(null);
-  if (h !== p.id) history.replaceState(null, '', `#${encodeURIComponent(p.id)}`);
-  showEditor(p.id);
+  if (store.promptById(h)) return showEditor(h);
+  history.replaceState(null, '', '#settings');
+  showSettings('');
+}
+
+// One view at a time.
+function show(view) {
+  for (const el of [promptsEl, editorEl, savedEl, settingsEl]) el.hidden = el !== view;
+  window.scrollTo(0, 0);
 }
 
 window.addEventListener('hashchange', () => { commit(); route(); });
@@ -71,54 +78,47 @@ window.addEventListener('pagehide', commit);
 
 // ---------- the list ----------
 
+function showPrompts() {
+  commit();
+  show(promptsEl);
+  renderList();
+}
+
+// The prompts as rows (each opens the editor, arrows reorder), the row to
+// start a new one, and the counts shown on the settings list.
 function renderList() {
   const list = store.prompts();
-  const onSettings = !settingsEl.hidden || !savedEl.hidden;
   listEl.innerHTML = '';
   list.forEach((p, i) => {
     const li = document.createElement('li');
-    li.className = 'pp-row';
+    li.className = 'ios-split';
     const a = document.createElement('a');
-    a.className = 'pp-item';
+    a.className = 'ios-row';
     a.href = `#${encodeURIComponent(p.id)}`;
-    if (!onSettings && p.id === currentId) a.setAttribute('aria-current', 'page');
-    const n = document.createElement('span');
-    n.className = 'n';
-    n.textContent = p.label || defaultLabel(p.template);
-    const sub = document.createElement('span');
-    sub.className = 's';
+    const name = p.label || defaultLabel(p.template);
     const blanks = describe(p.template).blanks.length;
-    sub.textContent = `${engineById(p.engine || store.setting('defaultEngine', 'google-ai')).name}${blanks > 1 ? ` · ${blanks} blanks` : ''}`;
-    a.append(n, sub);
-    li.appendChild(a);
-
+    a.innerHTML = '<span class="ios-name"></span><span class="ios-value"></span><span class="ios-chev" aria-hidden="true">›</span>';
+    a.querySelector('.ios-name').textContent = name;
+    a.querySelector('.ios-value').textContent = `${engineById(p.engine || store.setting('defaultEngine', 'google-ai')).name}${blanks > 1 ? ` · ${blanks} blanks` : ''}`;
     const move = document.createElement('span');
-    move.className = 'pp-move';
+    move.className = 'ios-move';
     move.append(
-      moveButton('up', `Move ${n.textContent} up`, i === 0, () => shift(p.id, -1)),
-      moveButton('down', `Move ${n.textContent} down`, i === list.length - 1, () => shift(p.id, 1)),
+      moveButton('up', `Move ${name} up`, i === 0, () => shift(p.id, -1)),
+      moveButton('down', `Move ${name} down`, i === list.length - 1, () => shift(p.id, 1)),
     );
-    li.appendChild(move);
+    li.append(move, a);
     listEl.appendChild(li);
   });
-  if (!onSettings && !currentId) {
-    const li = document.createElement('li');
-    li.className = 'pp-row';
-    li.innerHTML = '<span class="pp-item draft" aria-current="page"><span class="n">New prompt</span><span class="s">Not saved until it has words</span></span>';
-    listEl.appendChild(li);
-  }
   const full = list.length >= store.MAX_PROMPTS;
-  countEl.textContent = `${list.length} of ${store.MAX_PROMPTS}${full ? ', the most there can be' : ''}`;
-  newLink.classList.toggle('disabled', full);
-  newLink.setAttribute('aria-disabled', String(full));
-  newLink.title = full ? 'Delete a prompt to make room for a new one' : '';
-  if (!settingsEl.hidden) settingsLink.setAttribute('aria-current', 'page'); else settingsLink.removeAttribute('aria-current');
-  if (!savedEl.hidden) $('#pp-saved').setAttribute('aria-current', 'page'); else $('#pp-saved').removeAttribute('aria-current');
+  const add = $('#prompt-new');
+  add.innerHTML = full
+    ? '<li><span class="ios-row ios-static ios-dim">Six is the most there can be. Delete one to add another.</span></li>'
+    : '<li><a class="ios-row ios-action" href="#new">New prompt</a></li>';
+  $('#prompts-count').textContent = `${list.length} of ${store.MAX_PROMPTS}`;
+  $('#v-prompts').textContent = String(list.length);
   const n = store.savedCards().length;
-  $('#pp-saved-count').textContent = n ? `${n} saved` : 'None yet';
+  $('#v-saved').textContent = n ? String(n) : 'None yet';
 }
-
-newLink.addEventListener('click', e => { if (newLink.classList.contains('disabled')) e.preventDefault(); });
 
 function moveButton(dir, label, disabled, onClick) {
   const b = document.createElement('button');
@@ -141,15 +141,13 @@ function shift(id, dir) {
   [ids[i], ids[j]] = [ids[j], ids[i]];
   store.reorder(ids);
   renderList();
-  listEl.querySelectorAll('.pp-row')[j]?.querySelector(`.pp-move button:${dir < 0 ? 'first-child' : 'last-child'}:not(:disabled)`)?.focus();
+  listEl.querySelectorAll('.ios-split')[j]?.querySelector(`.ios-move button:${dir < 0 ? 'first-child' : 'last-child'}:not(:disabled)`)?.focus();
 }
 
 // ---------- the editor ----------
 
 function showEditor(id) {
-  editorEl.hidden = false;
-  settingsEl.hidden = true;
-  savedEl.hidden = true;
+  show(editorEl);
   currentId = id;
   const p = id ? store.promptById(id) : null;
   nameEl.value = p?.label || '';
@@ -437,16 +435,14 @@ $('#ed-delete-yes').addEventListener('click', () => {
   currentId = null;
   tplEl.value = '';
   nameEl.value = '';
-  location.hash = next ? encodeURIComponent(next.id) : 'new';
+  location.hash = 'prompts';
 });
 
 // ---------- saved cards ----------
 
 function showSaved() {
   commit();
-  editorEl.hidden = true;
-  settingsEl.hidden = true;
-  savedEl.hidden = false;
+  show(savedEl);
   renderSaved();
   renderList();
 }
@@ -534,7 +530,7 @@ $('#saved-clear').addEventListener('click', () => {
 // ---------- settings ----------
 
 // One list of grouped rows; a row with › opens its own page at
-// #settings/<name>, with a way back. Switches change at once.
+// #<name>, with a way back. Switches change at once.
 
 const THEMES = [['system', 'Match system'], ['light', 'Light'], ['dark', 'Dark']];
 const DETAILS = { engine: 'New prompts open in', appearance: 'Appearance', topics: 'Topics', account: 'Account' };
@@ -542,14 +538,10 @@ let detail = '';
 
 function showSettings(name = '') {
   commit();
-  editorEl.hidden = true;
-  savedEl.hidden = true;
-  settingsEl.hidden = false;
+  show(settingsEl);
   detail = DETAILS[name] ? name : '';
-  if (name && !detail) history.replaceState(null, '', '#settings');
   renderSettings();
   renderList();
-  window.scrollTo(0, 0);
 }
 
 function renderSettings() {
@@ -560,9 +552,7 @@ function renderSettings() {
   $('#s-newtab').checked = !!store.setting('newTab', false);
   $('#v-theme').textContent = THEMES.find(t => t[0] === store.setting('theme', 'system'))[1];
   $('#s-explore').checked = store.setting('explore', true) !== false;
-  const p = prefsFrom(store.setting);
-  const on = p.collections.length;
-  $('#v-topics').textContent = `${p.categories.size} of ${CATEGORIES.length}${on ? ` · ${on} collection${on === 1 ? '' : 's'}` : ''}`;
+  $('#v-topics').textContent = `${prefsFrom(store.setting).categories.size} of ${CATEGORIES.length}`;
   $('#s-recent').checked = store.recentOn();
   const user = store.currentUser();
   $('#v-account-name').textContent = user ? user.email : 'Sign in';
@@ -630,7 +620,6 @@ function switchRow(name, checked, onChange, cls = '') {
 }
 
 // Topics: a switch for each, its sub-topics ticked underneath while it is on.
-// Then the collections, each with its own switch.
 function renderTopics(body) {
   const p = prefsFrom(store.setting);
   body.append(foot('Explore shows cards from the topics switched on. Untick a sub-topic to leave it out.'));
@@ -652,20 +641,8 @@ function renderTopics(body) {
     }
     body.append(ul);
   }
-  const collections = knownCollections();
-  if (collections.length) {
-    body.append(label('Collections'));
-    const ul = group();
-    for (const c of collections) {
-      ul.appendChild(li(switchRow(c.name, p.collections.includes(c.key), v => {
-        const cur = prefsFrom(store.setting).collections.filter(k => k !== c.key);
-        store.updateSettings({ collections: v ? [...cur, c.key] : cur });
-      })));
-    }
-    body.append(ul, foot('A collection is a learning path through one subject, from ways in to rabbit holes. Each one switched on gets its own pill above the cards.'));
-  }
   const reset = group();
-  const b = rowButton('Go back to the starting topics');
+  const b = rowButton('Reset to Defaults');
   b.classList.add('ios-action');
   b.addEventListener('click', () => { store.updateSettings({ topics: DEFAULT_TOPICS }); renderDetail(); });
   reset.appendChild(li(b));
@@ -678,18 +655,6 @@ function saveTopics(p) {
   renderDetail();
   window.scrollTo(0, y);
 }
-
-// Collections come with Explore's list; the home page keeps a copy.
-function knownCollections() {
-  try { return JSON.parse(localStorage.getItem('tmea:explore-feed') || 'null')?.feed?.collections || []; } catch { return []; }
-}
-fetch('/api/explore', { credentials: 'omit' }).then(r => r.json()).then(feed => {
-  try {
-    const cached = JSON.parse(localStorage.getItem('tmea:explore-feed') || 'null');
-    localStorage.setItem('tmea:explore-feed', JSON.stringify({ at: cached?.at || 0, feed }));
-  } catch { /* private mode */ }
-  if (detail === 'topics') renderDetail();
-}).catch(() => {});
 
 function renderAccount(body) {
   const user = store.currentUser();
@@ -766,8 +731,8 @@ store.subscribe(what => {
     const typing = document.activeElement === tplEl || document.activeElement === nameEl;
     if (!settingsEl.hidden) renderSettings();
     else if (!savedEl.hidden) renderSaved();
-    else if (currentId && !store.promptById(currentId)) route();
-    else if (currentId && !typing) showEditor(currentId);
+    else if (!editorEl.hidden && currentId && !store.promptById(currentId)) route();
+    else if (!editorEl.hidden && currentId && !typing) showEditor(currentId);
     renderList();
   }
 });

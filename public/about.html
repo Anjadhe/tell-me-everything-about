@@ -7,7 +7,7 @@
 <meta name="description" content="What Tell me everything about is, how it works, and what it keeps.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/app.css?v=5e11922ad2">
+<link rel="stylesheet" href="/app.css?v=3b3d0ea256">
 <script>try{var t=localStorage.getItem('tmea:theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
 <style>
   .about { width: min(100%, 620px); margin: 0 auto; padding: 4vh 0 10vh; }
@@ -45,11 +45,11 @@
 
   <h2>How it works</h2>
   <ul>
-    <li>Keep up to six prompts, written on the <a href="/prompts">Prompts</a> page. Each has a short name, the wording, and the place it opens. Write <code>{}</code> where the topic goes, or leave it out and the topic is added at the end.</li>
+    <li>Keep up to six prompts, written under <a href="/settings#prompts">Settings, Prompts</a>. Each has a short name, the wording, and the place it opens. Write <code>{}</code> where the topic goes, or leave it out and the topic is added at the end.</li>
     <li>A prompt can have up to four named blanks, like <code>Compare {thing} with {other thing}</code>; each becomes its own box on the home page. Some placeholders fill themselves in: <code>{today}</code>, <code>{month}</code>, <code>{year}</code> and <code>{language}</code>. They are worked out in your browser.</li>
     <li>The page builds the final sentence and hands it to the engine as a normal search link. Nothing is generated here and nothing is answered here. The engine you chose does that, on its own site, under your own account there.</li>
     <li>Under the box, <strong>Explore</strong> offers topics worth a deep answer. Hover one to see the sentence it makes, click it to ask. Each card opens with whichever prompt you have selected, so the same topic can be explained simply, told in full, or brought up to date.</li>
-    <li>Choose what Explore shows under <a href="/prompts#settings/topics">Settings, Topics</a>: switch topics on or off and tick the sub-topics you want. You can also hide a topic straight from a card's <strong>⋯</strong> menu, or save a card for later.</li>
+    <li>Choose what Explore shows under <a href="/settings#topics">Settings, Topics</a>: switch topics on or off and tick the sub-topics you want. You can also hide a topic straight from a card's <strong>⋯</strong> menu, or save a card for later.</li>
   </ul>
 
   <h2>Where Explore comes from</h2>
@@ -57,7 +57,7 @@
   <p>Everyone gets the same list, fetched without a cookie. Your browser then picks and orders cards from it using the topics you chose. Those choices sync with your settings when you are signed in, but they are never sent to Claude and never used to choose the list. Cards you set aside, and which cards you have already seen, are kept in this browser only.</p>
 
   <h2>Collections</h2>
-  <p>Some subjects get a collection: a short learning path written by Claude, from ways in to the ideas that make the subject click to the rabbit holes. Collections are chosen and checked by the site's editor, and every one is the same for everyone. Switch any of them on in Topics to give it its own pill; each one also lends a couple of cards a day to everyone's list.</p>
+  <p>Some subjects get a collection: a short learning path written by Claude, from ways in to the ideas that make the subject click to the rabbit holes. Collections are chosen and checked by the site's editor, and every one is the same for everyone. Their cards simply join Explore: you see the ones that fit the topics and sub-topics you chose, like any other card.</p>
 
   <h2>Sponsored cards</h2>
   <p>Some cards may be sponsored, and they are always labelled. Sponsored cards come to every visitor in the same list as everything else. Your browser decides whether one fits you, by the same rules as other cards, and never shows one in a category or topic you have hidden. The sponsor learns how many times their card was shown and clicked, counted the same anonymous way as launches: no cookie, no identifier, nothing about you. A card's <strong>⋯</strong> menu says why it is there and lets you set it aside.</p>
@@ -76,7 +76,7 @@
   <p>If you turn on <strong>Remember my recent topics</strong>, the last few topics you asked about are kept in this browser so Explore can offer them again. They are never synced and never sent anywhere, even when you are signed in. Turning the switch off forgets them.</p>
   <p>Cards you save from Explore are kept the same way as your prompts: in this browser, and, when you are signed in, with your account so they appear on your other browsers. Saving is the one time a topic you chose is stored with your account; the topics you type and launch still never pass through this site.</p>
   <p>Signing in sets one cookie, which keeps you signed in and does nothing else.</p>
-  <p>Signing in is optional and exists for one reason: so your prompts follow you to another browser or computer. It uses a link sent to your email, with no password. The server then stores your email address, a session, and one small record of your prompts, settings and saved cards. That is the whole list. <strong>Delete account</strong> in <a href="/prompts#settings">Settings</a> removes all of it at once. The prompts in the browser you are using stay.</p>
+  <p>Signing in is optional and exists for one reason: so your prompts follow you to another browser or computer. It uses a link sent to your email, with no password. The server then stores your email address, a session, and one small record of your prompts, settings and saved cards. That is the whole list. <strong>Delete account</strong> in <a href="/settings#account">Settings, Account</a> removes all of it at once. The prompts in the browser you are using stay.</p>
 
   <h2>Who made it</h2>
   <p>Made by <a href="https://anjadhe.ai/founder">Ram</a>, who kept typing the same sentence into Google's AI mode and decided the browser should type it instead. Questions and ideas are welcome there.</p>

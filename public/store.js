@@ -1,5 +1,5 @@
 // The prompts, the settings and the account, shared by the home page and the
-// prompts page.
+// settings page.
 //
 // Local first: the whole state lives in localStorage and the page works with
 // no account. Signing in adds a server copy, merged per prompt by the same
@@ -7,7 +7,7 @@
 // clobbering the other. Two tabs of this site stay in step through the
 // storage event, and a page restored from the back-forward cache re-reads.
 
-import { merge, emptyState, normalize, sameState, MAX_PROMPTS, MAX_SAVED, SAVED_PREFIX } from './merge.js?v=5e11922ad2';
+import { merge, emptyState, normalize, sameState, MAX_PROMPTS, MAX_SAVED, SAVED_PREFIX } from './merge.js?v=3b3d0ea256';
 
 export { MAX_PROMPTS, MAX_SAVED };
 
@@ -164,7 +164,7 @@ export function unsaveAll() {
   save({ ...state, saved: [], tombstones });
 }
 
-// The prompt the home page shows. The prompts page sets it to the one being
+// The prompt the home page shows. The prompt editor sets it to the one being
 // edited, so going back lands on it.
 export function selectedId() {
   try { return localStorage.getItem(SELECTED_KEY); } catch { return null; }

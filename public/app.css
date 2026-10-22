@@ -390,7 +390,6 @@ kbd { font-family: var(--sans); font-size: 11px; color: var(--ink-2); border: 1p
 
 .explore-empty { grid-column: 1 / -1; color: var(--ink-2); margin: 8px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .explore-empty.waiting { font-family: var(--serif); font-size: 17px; color: var(--ink-2); padding: 28px 4px; animation: breathe 1.8s ease-in-out infinite; }
-.topic-pill.pack-pill { font-family: var(--serif); font-size: 13.5px; font-style: italic; }
 
 .explore-empty a { color: var(--accent); }
 
@@ -795,23 +794,12 @@ dialog::backdrop { background: rgba(0,0,0,.18); backdrop-filter: blur(2px); }
 }
 .chip[aria-pressed="true"]::before { opacity: 1; }
 
-/* ---- prompts page ---- */
-.pp {
-  display: grid;
-  grid-template-columns: 230px minmax(0, 1fr);
-  gap: clamp(28px, 5vw, 64px);
-  align-items: start;
-  width: min(100%, 1040px);
-  margin: 20px auto 56px;
-}
-.pp-side { position: sticky; top: 20px; }
-.pp-title { font-family: var(--serif); font-size: 30px; font-weight: 400; letter-spacing: -0.015em; margin: 0 0 2px; }
-.pp-count { color: var(--ink-3); font-size: 12px; margin: 0 0 16px; }
-.pp-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.pp-row { position: relative; }
+/* ---- settings page: the prompt editor ---- */
+.st { width: min(100%, 720px); margin: 12px auto 56px; }
+/* .pp-item: a sidebar row, used by the card manager's list of collections. */
 .pp-item {
   display: flex; flex-direction: column; gap: 1px;
-  padding: 9px 56px 9px 12px;
+  padding: 9px 12px;
   border-radius: 9px;
   color: var(--ink-2);
   text-decoration: none;
@@ -823,15 +811,14 @@ dialog::backdrop { background: rgba(0,0,0,.18); backdrop-filter: blur(2px); }
 :root[data-theme="dark"] .pp-item:hover { background: rgba(255,255,255,.05); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .pp-item:hover { background: rgba(255,255,255,.05); } }
 .pp-item[aria-current="page"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--line), 0 1px 2px rgba(0,0,0,.04); }
-.pp-item.draft .n { font-style: italic; }
-.pp-move { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); display: flex; gap: 0; opacity: 0; transition: opacity 120ms; }
-.pp-row:hover .pp-move, .pp-move:focus-within { opacity: 1; }
-@media (hover: none) { .pp-move { opacity: .8; } }
-.pp-new { margin-top: 12px; }
-.pp-new.disabled { opacity: .45; cursor: not-allowed; }
-.pp-more { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
-.pp-settings { padding-right: 12px; }
-.pp a.pill, .top a.pill { text-decoration: none; }
+.st a.pill, .top a.pill { text-decoration: none; }
+/* A prompt in the list: reorder arrows, then the row that opens it. */
+.ios-split { display: flex; align-items: stretch; }
+.ios-split .ios-row { flex: 1; min-width: 0; }
+.ios-move { display: flex; flex-direction: column; justify-content: center; padding-left: 8px; }
+.ios-move .icon { width: 22px; height: 18px; }
+.ios-group > li.ios-split + li.ios-split::before { left: 38px; }
+.ios-row.ios-dim { color: var(--ink-3); font-size: 13px; }
 
 .pp-main { min-width: 0; }
 .ed-head { display: flex; align-items: baseline; gap: 14px; margin: 4px 0 24px; min-height: 40px; }
@@ -1001,7 +988,7 @@ a.ios-row:hover, button.ios-row:hover:not(:disabled) { background: var(--ground)
 .ios-signin { max-width: 520px; margin-top: 14px; }
 #settings-panel .ed-head { margin-bottom: 8px; }
 
-/* Saved cards: the bookmark on a card, and the list on /prompts. */
+/* Saved cards: the bookmark on a card, and the list in settings. */
 .card-save {
   flex: none;
   margin-left: auto;
@@ -1047,8 +1034,6 @@ a.ios-row:hover, button.ios-row:hover:not(:disabled) { background: var(--ground)
 .account-intro { margin: 0 0 12px; }
 
 @media (max-width: 760px) {
-  .pp { grid-template-columns: 1fr; gap: 26px; margin-top: 8px; }
-  .pp-side { position: static; }
   .tpl-mirror, .tpl textarea { font-size: 19px; }
   .ed-preview { padding: 18px 18px 16px; }
   .ed-preview-foot { flex-direction: column; align-items: stretch; }

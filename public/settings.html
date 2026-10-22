@@ -3,18 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Prompts · Tell me everything about</title>
-<meta name="description" content="Write the prompts your home page finishes for you, with blanks to fill in and details that fill themselves in.">
+<title>Settings · Tell me everything about</title>
+<meta name="description" content="Your prompts, saved cards, Explore topics and account for Tell me everything about.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/app.css?v=5e11922ad2">
-<link rel="modulepreload" href="/prompts.js?v=5e11922ad2">
-<link rel="modulepreload" href="/store.js?v=5e11922ad2">
-<link rel="modulepreload" href="/merge.js?v=5e11922ad2">
-<link rel="modulepreload" href="/engines.js?v=5e11922ad2">
-<link rel="modulepreload" href="/template.js?v=5e11922ad2">
-<link rel="modulepreload" href="/sentence.js?v=5e11922ad2">
-<link rel="modulepreload" href="/categories.js?v=5e11922ad2">
+<link rel="stylesheet" href="/app.css?v=3b3d0ea256">
+<link rel="modulepreload" href="/settings.js?v=3b3d0ea256">
+<link rel="modulepreload" href="/store.js?v=3b3d0ea256">
+<link rel="modulepreload" href="/merge.js?v=3b3d0ea256">
+<link rel="modulepreload" href="/engines.js?v=3b3d0ea256">
+<link rel="modulepreload" href="/template.js?v=3b3d0ea256">
+<link rel="modulepreload" href="/sentence.js?v=3b3d0ea256">
+<link rel="modulepreload" href="/categories.js?v=3b3d0ea256">
 <script>try{var t=localStorage.getItem('tmea:theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body class="page-prompts">
@@ -31,20 +31,19 @@
   </nav>
 </header>
 
-<main class="pp">
-  <aside class="pp-side">
-    <h1 class="pp-title">Prompts</h1>
-    <p class="pp-count" id="pp-count"></p>
-    <ol class="pp-list" id="pp-list"></ol>
-    <a class="pill pp-new" id="pp-new" href="#new"><span aria-hidden="true">+</span> New prompt</a>
-    <div class="pp-more">
-      <a class="pp-item pp-settings" id="pp-saved" href="#saved"><span class="n">Saved cards</span><span class="s" id="pp-saved-count"></span></a>
-      <a class="pp-item pp-settings" id="pp-settings" href="#settings"><span class="n">Settings and account</span></a>
-    </div>
-  </aside>
+<main class="st">
+  <!-- Prompts: the list; each one opens the editor. -->
+  <section class="pp-main" id="prompts-panel" hidden aria-labelledby="prompts-heading">
+    <a class="ios-back" href="#settings">‹ Settings</a>
+    <header class="ed-head"><h2 id="prompts-heading">Prompts</h2><span class="ed-status on" id="prompts-count"></span></header>
+    <ul class="ios-group" id="prompt-list"></ul>
+    <ul class="ios-group" id="prompt-new"></ul>
+    <p class="ios-foot">Up to six. Each one is a tab on the home page; use the arrows to change their order.</p>
+  </section>
 
   <!-- One prompt -->
   <section class="pp-main" id="editor" hidden aria-labelledby="ed-heading">
+    <a class="ios-back" href="#prompts">‹ Prompts</a>
     <header class="ed-head">
       <h2 id="ed-heading">New prompt</h2>
       <span id="ed-status" class="ed-status" aria-live="polite"></span>
@@ -102,6 +101,7 @@
 
   <!-- Saved Explore cards -->
   <section class="pp-main" id="saved-panel" hidden aria-labelledby="saved-heading">
+    <a class="ios-back" href="#settings">‹ Settings</a>
     <header class="ed-head"><h2 id="saved-heading">Saved cards</h2></header>
     <p class="setting-note saved-intro">Cards you saved from Explore. Each one asks with the prompt selected on the home page. They are kept like your prompts: in this browser, and with your account when you are signed in.</p>
     <ol class="saved-list" id="saved-list"></ol>
@@ -115,24 +115,30 @@
     <div id="settings-root">
       <header class="ed-head"><h2 id="settings-heading">Settings</h2></header>
 
+      <ul class="ios-group">
+        <li><a class="ios-row" href="#prompts"><span class="ios-name">Prompts</span><span class="ios-value" id="v-prompts"></span><span class="ios-chev" aria-hidden="true">›</span></a></li>
+        <li><a class="ios-row" href="#saved"><span class="ios-name">Saved cards</span><span class="ios-value" id="v-saved"></span><span class="ios-chev" aria-hidden="true">›</span></a></li>
+      </ul>
+      <p class="ios-foot">The prompts your home page finishes for you, and the Explore cards you kept.</p>
+
       <div class="ios-label">Opening</div>
       <ul class="ios-group">
-        <li><a class="ios-row" href="#settings/engine"><span class="ios-name">New prompts open in</span><span class="ios-value" id="v-engine"></span><span class="ios-chev" aria-hidden="true">›</span></a></li>
+        <li><a class="ios-row" href="#engine"><span class="ios-name">New prompts open in</span><span class="ios-value" id="v-engine"></span><span class="ios-chev" aria-hidden="true">›</span></a></li>
         <li><label class="ios-row"><span class="ios-name">Open results in a new tab</span><input type="checkbox" id="s-newtab" class="switch"></label></li>
-        <li><a class="ios-row" href="#settings/appearance"><span class="ios-name">Appearance</span><span class="ios-value" id="v-theme"></span><span class="ios-chev" aria-hidden="true">›</span></a></li>
+        <li><a class="ios-row" href="#appearance"><span class="ios-name">Appearance</span><span class="ios-value" id="v-theme"></span><span class="ios-chev" aria-hidden="true">›</span></a></li>
       </ul>
 
       <div class="ios-label">Explore</div>
       <ul class="ios-group">
         <li><label class="ios-row"><span class="ios-name">Show Explore under the box</span><input type="checkbox" id="s-explore" class="switch"></label></li>
-        <li><a class="ios-row" href="#settings/topics"><span class="ios-name">Topics</span><span class="ios-value" id="v-topics"></span><span class="ios-chev" aria-hidden="true">›</span></a></li>
+        <li><a class="ios-row" href="#topics"><span class="ios-name">Topics</span><span class="ios-value" id="v-topics"></span><span class="ios-chev" aria-hidden="true">›</span></a></li>
         <li><label class="ios-row"><span class="ios-name">Remember my recent topics</span><input type="checkbox" id="s-recent" class="switch"></label></li>
       </ul>
       <p class="ios-foot">Recent topics stay in this browser only, never synced or sent anywhere. Turning it off forgets them.</p>
 
       <div class="ios-label">Account</div>
       <ul class="ios-group">
-        <li><a class="ios-row" href="#settings/account"><span class="ios-name" id="v-account-name">Sign in</span><span class="ios-value" id="v-account"></span><span class="ios-chev" aria-hidden="true">›</span></a></li>
+        <li><a class="ios-row" href="#account"><span class="ios-name" id="v-account-name">Sign in</span><span class="ios-value" id="v-account"></span><span class="ios-chev" aria-hidden="true">›</span></a></li>
       </ul>
       <p class="ios-foot" id="v-account-foot">Keep your prompts, settings and saved cards on every device.</p>
     </div>
@@ -150,6 +156,6 @@
   <span class="foot-links"><a href="/about">About</a><a href="/">Home</a></span>
 </footer>
 
-<script type="module" src="/prompts.js?v=5e11922ad2"></script>
+<script type="module" src="/settings.js?v=3b3d0ea256"></script>
 </body>
 </html>

@@ -28,7 +28,7 @@ plain redirect from the browser to the engine.
 | Path | What |
 |------|------|
 | `public/index.html`, `app.css`, `app.js` | The home page: the sentence, launching, Explore. Vanilla modules, no build. |
-| `public/prompts.html`, `prompts.js` | `/prompts`: write and order prompts with a live preview; settings and account. |
+| `public/settings.html`, `settings.js` | `/settings`: a grouped list with a page per row: prompts (write and order them, with a live preview), saved cards, Explore topics, account. `/prompts` redirects here. |
 | `public/template.js` | What a prompt means: `{}` and named blanks like `{city}` (up to four), and `{today}`, `{month}`, `{year}`, `{language}`, which fill themselves in. |
 | `public/sentence.js` | Draws a prompt as the sentence with a box per blank; shared by the home page and the preview. |
 | `public/store.js` | State, settings, sync and the account, shared by both pages. Tabs stay in step through the storage event. |
@@ -99,9 +99,9 @@ lives: each day's list, pinned cards (your own, shown to everyone at the top
 of For you and of their category between optional dates), sponsored cards,
 and collections. Add, edit or delete cards, with a live preview. To make a
 collection, type a subject and press Generate: Claude writes a learning path
-(about 12 cards) for it; write one again for fresh topics. Visitors switch
-collections on in Settings, Topics, and each lends two cards a day to the
-daily list. Every save goes through the same checks
+(about 12 cards) for it; write one again for fresh topics. A collection's
+cards join everyone's Explore and are chosen by topic and sub-topic like any
+other card. Every save goes through the same checks
 as a generated card (`adminCard` in `src/explore.js`), and an edited card keeps
 its id so saved and seen cards still match. Changes reach visitors within 15
 minutes.

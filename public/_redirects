@@ -1,0 +1,3 @@
+# Settings moved: /prompts is now /settings (the #fragment carries over).
+/prompts /settings 301
+/prompts.html /settings 301

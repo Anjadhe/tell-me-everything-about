@@ -4,15 +4,15 @@
 // reach the Worker's list or Claude. Pure; pinned by test/interests.test.js.
 //
 // Choices (in settings):
-//   topics       { categories: [id], tags: [id] }   the topics switched on,
-//                and the sub-topics ticked under them; DEFAULT_TOPICS until
-//                the visitor changes anything
-//   collections  [key]   collections from the card manager switched on
+//   topics   { categories: [id], tags: [id] }   the topics switched on, and
+//            the sub-topics ticked under them; DEFAULT_TOPICS until the
+//            visitor changes anything
 //
 // A card shows when its topic is on and, if it has sub-topics, at least one
-// of them is ticked.
+// of them is ticked. That holds for every card, whether it came from the
+// day's list or from a collection written in the card manager.
 
-import { CATEGORIES, CATEGORY_IDS, TAG_IDS } from './categories.js?v=5e11922ad2';
+import { CATEGORIES, CATEGORY_IDS, TAG_IDS } from './categories.js?v=3b3d0ea256';
 
 // Six topics to start with, every sub-topic ticked; Society and Sport are
 // there to switch on.
@@ -28,7 +28,6 @@ export function prefsFrom(setting) {
   return {
     categories: new Set(t.categories.filter(id => CATEGORY_IDS.includes(id))),
     tags: new Set((t.tags || []).filter(id => TAG_IDS.includes(id))),
-    collections: (setting('collections', []) || []).filter(k => typeof k === 'string'),
   };
 }
 
@@ -79,7 +78,7 @@ export function rank(cards, prefs, { dismissed = new Set(), seenBefore = new Set
     !(c.carried && seenBefore.has(c.id)) &&
     visible(c, prefs) &&
     (!category || c.category === category));
-  const scored = pool.map((c, i) => ({ c, s: 1 - i / Math.max(1, pool.length) - (c.carried ? 0.4 : 0) + (c.pack ? 1 : 0) }));
+  const scored = pool.map((c, i) => ({ c, s: 1 - i / Math.max(1, pool.length) - (c.carried ? 0.4 : 0) }));
   scored.sort((a, b) => b.s - a.s);
   return category ? scored.map(x => x.c) : paceCollections(spread(scored.map(x => x.c)));
 }
@@ -98,21 +97,19 @@ export function spread(list) {
   return out;
 }
 
-// Cards from collections the visitor switched on lead often but never take
-// over: at most one in every PACK_EVERY places in the mixed list. Their own
-// pill shows them all.
+// Collection cards are many and timeless. In the mix they come one in every
+// PACK_EVERY places, after three of the day's cards, so the day's cards lead
+// and the collections are spread through rather than piled at the end. A
+// topic's pill shows them all in order.
 export const PACK_EVERY = 4;
 
 export function paceCollections(list) {
-  const at = new Map(list.map((c, i) => [c, i]));
   const own = list.filter(c => c.pack);
   const rest = list.filter(c => !c.pack);
   const out = [];
-  let since = PACK_EVERY;                 // other cards since the last collection card
+  let since = 0;                          // the day's cards since the last collection card
   while (own.length || rest.length) {
-    const p = own[0], r = rest[0];
-    const takeOwn = p && (!r || (since >= PACK_EVERY - 1 && at.get(p) < at.get(r)));
-    if (takeOwn) { out.push(own.shift()); since = 0; }
+    if (own.length && (!rest.length || since >= PACK_EVERY - 1)) { out.push(own.shift()); since = 0; }
     else { out.push(rest.shift()); since++; }
   }
   return out;

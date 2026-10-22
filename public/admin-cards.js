@@ -1,11 +1,11 @@
 // The card manager (/admin/cards): every card Explore can show, by where it
 // lives. Daily lists and collections were written by Claude and can be
 // corrected or trimmed; pinned and sponsored cards are written here. Saves go
-// through the Worker's checks (adminCard in src/explore.js?v=5e11922ad2), the same as a
+// through the Worker's checks (adminCard in src/explore.js?v=3b3d0ea256), the same as a
 // generated card. Uses the admin key from /admin.
 
-import { CATEGORIES, categoryById, KINDS, DEPTHS, STEPS, ORIGINS } from './categories.js?v=5e11922ad2';
-import { motif } from './explore.js?v=5e11922ad2';
+import { CATEGORIES, categoryById, KINDS, DEPTHS, STEPS, ORIGINS } from './categories.js?v=3b3d0ea256';
+import { motif } from './explore.js?v=3b3d0ea256';
 
 const KEY = 'tmea:admin-key';
 const LIMITS = { topic: 70, hook: 110, angle: 140, figure: 10, figureLabel: 40 };
@@ -16,7 +16,7 @@ const COLLECTIONS = {
   pinned: { title: 'Pinned', note: 'Your own cards, shown to everyone at the top of For you and of their category, between the dates you set. Pause one by switching it off.' },
   sponsored: { title: 'Sponsored', note: 'Labelled “Sponsored”, sent to everyone with the list; each browser shows at most one in about eight cards, and only where the visitor’s own choices allow. Views and clicks are on /admin.' },
   pack: { title: 'Collection', note: '' },
-  packs: { title: 'Collections', note: 'Learning paths Claude writes for a subject you give it: ways in, deeper ideas, rabbit holes. Visitors can switch each one on in Topics, where it gets its own pill, and every collection lends two cards a day to everyone’s list. Open one to edit its cards, write it again for fresh topics, or delete it.' },
+  packs: { title: 'Collections', note: 'Learning paths Claude writes for a subject you give it: ways in, deeper ideas, rabbit holes. Their cards join everyone’s Explore, shown wherever a visitor’s topics and sub-topics match, like any other card. Open one to edit its cards, write it again for fresh topics, or delete it.' },
 };
 
 let collection = 'daily';

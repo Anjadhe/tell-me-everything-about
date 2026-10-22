@@ -19,8 +19,6 @@ const LINKS_PER_IP_PER_HOUR = 20;
 const MAX_STATE_BYTES = 192 * 1024; // prompts, settings, and up to 150 saved cards
 const EXPLORE_KEEP_DAYS = 30;
 const EXPLORE_EDGE_SECONDS = 900;
-// Collections lend this many of their cards to the daily list, each day.
-const COLLECTION_CARDS_A_DAY = 2;
 
 export default {
   async fetch(request, env, ctx) {
@@ -359,8 +357,8 @@ async function getExplore(request, env, ctx) {
   const feed = latest.results[0] ? JSON.parse(latest.results[0].data) : evergreenFeed(day);
   feed.sponsored = campaigns.results.map(sponsoredCard).filter(Boolean);
   feed.pinned = pins.results.map(pinnedCard).filter(Boolean);
-  // Collections written in the card manager, all of them, so each browser
-  // can show the ones its visitor switched on without asking for them.
+  // Collections written in the card manager, all of them: their cards join
+  // the pool, and each browser shows the ones that fit its visitor's topics.
   feed.collections = packs.results.map(r => {
     let cards = [];
     try { cards = JSON.parse(r.data); } catch { /* none */ }
@@ -389,8 +387,7 @@ async function refreshExplore(env) {
     const history = rows.results.map(r => {
       try { return { day: r.day, cards: JSON.parse(r.data).cards || [] }; } catch { return { day: r.day, cards: [] }; }
     });
-    const extras = await collectionCards(env, day);
-    const feed = await generate(env, day, { history, extras });
+    const feed = await generate(env, day, { history });
     const cutoff = new Date(Date.now() - EXPLORE_KEEP_DAYS * 86400_000).toISOString().slice(0, 10);
     await env.DB.batch([
       env.DB.prepare('INSERT INTO explore (day, data, created_at) VALUES (?, ?, ?) ON CONFLICT(day) DO UPDATE SET data = excluded.data, created_at = excluded.created_at')
@@ -455,20 +452,6 @@ async function storePack(env, key, pack) {
      ON CONFLICT(key) DO UPDATE SET name = excluded.name, suitable = excluded.suitable, data = excluded.data, created_at = excluded.created_at`
   ).bind(key, pack.name || key.replace(/-/g, ' '), pack.suitable ? 1 : 0, JSON.stringify(pack.cards), now, now).run();
   return pack;
-}
-
-// A few cards a day from each collection, turning through it, so what the
-// collections hold reaches everyone's list.
-async function collectionCards(env, day) {
-  const rows = await env.DB.prepare('SELECT data FROM interest_packs WHERE suitable = 1 AND alias_of IS NULL').all();
-  const turn = Math.floor(Date.parse(`${day}T00:00:00Z`) / 86400_000);
-  const out = [];
-  for (const r of rows.results) {
-    let cards = [];
-    try { cards = JSON.parse(r.data); } catch { continue; }
-    for (let i = 0; i < Math.min(COLLECTION_CARDS_A_DAY, cards.length); i++) out.push(cards[(turn * COLLECTION_CARDS_A_DAY + i) % cards.length]);
-  }
-  return out;
 }
 
 // ---------- the card manager ----------

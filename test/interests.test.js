@@ -13,14 +13,12 @@ test('the starting topics: six on with every sub-topic, Society and Sport off', 
   assert.equal(p.categories.has('sport'), false);
   assert.equal(p.tags.has('space') && p.tags.has('food'), true);
   assert.equal(p.tags.has('football'), false);
-  assert.deepEqual(p.collections, []);
 });
 
 test('stored choices are checked; unknown ids go', () => {
-  const p = prefsFrom(settings({ topics: { categories: ['sport', 'nope'], tags: ['football', 'nope'] }, collections: ['roman-history', 3] }));
+  const p = prefsFrom(settings({ topics: { categories: ['sport', 'nope'], tags: ['football', 'nope'] } }));
   assert.deepEqual([...p.categories], ['sport']);
   assert.deepEqual([...p.tags], ['football']);
-  assert.deepEqual(p.collections, ['roman-history']);
   assert.deepEqual(topicsValue(p), { categories: ['sport'], tags: ['football'] });
 });
 
@@ -75,10 +73,10 @@ test('spread lets no topic take more than two places in a row while others wait'
   assert.deepEqual(spread(list).map(x => x.id), ['s1', 's2', 'h1', 's3', 's4']);
 });
 
-test('collection cards come at most once in every four places in the mix', () => {
-  const list = [...Array.from({ length: 6 }, (_, i) => c(`p${i}`, 'history', { pack: 'x' })), ...Array.from({ length: 12 }, (_, i) => c(`d${i}`, 'science'))];
+test('collection cards are spread one in every four places, the day’s cards leading', () => {
+  const list = [...Array.from({ length: 12 }, (_, i) => c(`d${i}`, 'science')), ...Array.from({ length: 6 }, (_, i) => c(`p${i}`, 'history', { pack: 'x' }))];
   const out = paceCollections(list).map(x => x.id);
-  assert.equal(out[0], 'p0');
+  assert.deepEqual(out.slice(0, 8), ['d0', 'd1', 'd2', 'p0', 'd3', 'd4', 'd5', 'p1']);
   const lastOther = out.findLastIndex(id => id.startsWith('d'));
   const at = out.map((id, i) => (id.startsWith('p') && i < lastOther ? i : -1)).filter(i => i >= 0);
   for (let i = 1; i < at.length; i++) assert.ok(at[i] - at[i - 1] >= 4, out.join(','));
@@ -96,4 +94,10 @@ test('sponsored cards go only in their slots, in order, never outside the visito
   assert.equal(placeSponsored(list.slice(0, 2), sponsored, p).length, 2);
   assert.equal(placeSponsored(list, sponsored, p, { dismissed: new Set(['sp-b', 'sp-c']) }).filter(x => x.sponsored).length, 0);
   assert.deepEqual(placeSponsored(list, sponsored, p, { category: 'science' }).filter(x => x.sponsored).map(x => x.id), ['sp-b']);
+});
+
+test('collection cards are chosen by topic like any other, with no head start', () => {
+  const p = prefsFrom(settings({ topics: { categories: ['science'], tags: ['space'] } }));
+  const cards = [c('d1', 'science', { tags: ['space'] }), c('in-x-a', 'science', { tags: ['space'], pack: 'x' }), c('in-x-b', 'history', { tags: ['ancient'], pack: 'x' }), c('in-x-c', 'science', { tags: ['biology'], pack: 'x' })];
+  assert.deepEqual(rank(cards, p).map(x => x.id), ['d1', 'in-x-a']);
 });

@@ -36,7 +36,7 @@ export function browserFamily(ua) {
   return 'Other browser';
 }
 
-export const PAGE_PATHS = new Set(['/', '/about', '/admin', '/admin/cards', '/prompts']);
+export const PAGE_PATHS = new Set(['/', '/about', '/admin', '/admin/cards', '/settings']);
 
 export function requestKind(path) {
   const p = String(path || '');
