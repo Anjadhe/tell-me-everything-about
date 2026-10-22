@@ -1,17 +1,17 @@
 // Tell me everything about — the home page: a sentence to finish.
 //
-// State, sync and the account live in store.js?v=e7992f0abd, shared with the prompts
+// State, sync and the account live in store.js?v=c0b11e0890, shared with the prompts
 // page (/prompts) where prompts are written and settings are kept. This page
 // draws the selected prompt as a sentence with a box for each blank, launches
 // it, and shows Explore under it.
 
-import * as store from './store.js?v=e7992f0abd';
-import { ENGINES, engineById } from './engines.js?v=e7992f0abd';
-import { parse, fill, defaultLabel, autoValues } from './template.js?v=e7992f0abd';
-import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=e7992f0abd';
-import { createExplore } from './explore.js?v=e7992f0abd';
-import { prefsFrom } from './interests.js?v=e7992f0abd';
-import { packsFor, ensurePacks, retryPack } from './packs.js?v=e7992f0abd';
+import * as store from './store.js?v=c0b11e0890';
+import { ENGINES, engineById } from './engines.js?v=c0b11e0890';
+import { parse, fill, defaultLabel, autoValues } from './template.js?v=c0b11e0890';
+import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=c0b11e0890';
+import { createExplore } from './explore.js?v=c0b11e0890';
+import { prefsFrom } from './interests.js?v=c0b11e0890';
+import { packsFor, ensurePacks, retryPack } from './packs.js?v=c0b11e0890';
 
 const FEED_KEY = 'tmea:explore-feed';
 const FEED_FRESH_MS = 30 * 60 * 1000;
@@ -342,7 +342,7 @@ function renderExplore() {
   loadPacks();
 }
 
-// Cards for the visitor's own interests, written on the server (packs.js?v=e7992f0abd).
+// Cards for the visitor's own interests, written on the server (packs.js?v=c0b11e0890).
 function loadPacks() {
   ensurePacks(store.setting('keywords', ''), key => explore?.packChanged(key));
 }
@@ -421,7 +421,7 @@ function clearPreview() {
 
 // The first box's grey text: the blank's name, or the current suggestion.
 // A suggestion sits in a box of fixed width, smaller and on one line, so a
-// long topic can never rewrap the sentence and move the page (app.css?v=e7992f0abd).
+// long topic can never rewrap the sentence and move the page (app.css?v=c0b11e0890).
 function paintGhost() {
   const ghost = ghostOf(inputs[0]);
   if (!ghost) return;

@@ -36,7 +36,8 @@ plain redirect from the browser to the engine.
 | `public/explore.js` | Explore cards: links aimed through the selected prompt, hover previews, and the generated covers. |
 | `public/categories.js` | Explore's categories, tags, card kinds and colours. Shared by the page and the Worker. |
 | `public/interests.js` | Preferences and ranking, in the browser only: hidden and favoured categories, tags, keywords, the mix, sponsored placement. |
-| `src/explore.js` | The daily job: sources, one Claude call per category, the schema, cleaning, carrying earlier cards, the evergreen list, and sponsored rows. |
+| `src/explore.js` | The daily job: sources, one Claude call per category, the schema, cleaning, near-duplicates, carrying earlier cards, the evergreen list, interest packs, sponsored and pinned rows, and the card manager's checks. |
+| `public/admin/cards.html`, `public/admin-cards.js` | The card manager at `/admin/cards`. |
 | `public/_headers` | Cache headers: HTML briefly, versioned assets for a year. |
 | `extension/` | Browser extension that opens the page in every new tab. See [New tabs](#new-tabs). |
 | `scripts/extension-icons.js` | Renders `favicon.svg` to the PNG sizes the extension needs. |
@@ -90,13 +91,25 @@ the browser, so there are no images to host. NASA's picture of the day uses
 `DEMO_KEY` unless you set a `NASA_API_KEY` secret; any source that fails is
 skipped for the day.
 
+### Managing cards
+
+`/admin/cards` (the same admin key as `/admin`) lists every card by where it
+lives: each day's list, pinned cards (your own, shown to everyone at the top
+of For you and of their category between optional dates), sponsored cards,
+and interest packs. Add, edit or delete cards, with a live preview; delete a
+whole pack to have it written afresh. Every save goes through the same checks
+as a generated card (`adminCard` in `src/explore.js`), and an edited card keeps
+its id so saved and seen cards still match. Changes reach visitors within 15
+minutes.
+
 ### Sponsored cards
 
 Rows in the `sponsored` table (`migrations/0004_sponsored.sql`) are served to
 everyone with the day's list; each browser places at most one in about eight
 cards, only where the visitor's own choices allow, labelled with the sponsor.
 Views (once a day per browser) and clicks are counted per card with no
-identifier, and shown on `/admin`. To add one:
+identifier, and shown on `/admin`. Manage them in `/admin/cards`, or from the
+command line:
 
 ```sh
 npx wrangler d1 execute tmea --remote --command "INSERT INTO sponsored

@@ -1,10 +1,10 @@
-// Cards for the visitor's own interests ("Indian history"), written by
+// Cards for the visitor's own interests ("Roman history"), written by
 // Claude on the server and shared by everyone who types the same thing.
 // The request carries the interest's words and nothing else: no cookie, no
 // account. Packs are kept in this browser for a day, then asked for again
 // (the server refreshes its own copy weekly). One request at a time.
 
-import { keywordList, interestKeyOf } from './interests.js?v=e7992f0abd';
+import { keywordList, interestKeyOf } from './interests.js?v=c0b11e0890';
 
 const CACHE_KEY = 'tmea:interest-packs';
 const FRESH_MS = 24 * 60 * 60 * 1000;

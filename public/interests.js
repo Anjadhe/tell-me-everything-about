@@ -13,7 +13,7 @@
 //   mix        { timely: 0..1, surprising: 0..1 }   0.5 is no preference
 //   onboarded  true once the first-run picker is done or skipped
 
-import { CATEGORY_IDS, TAG_IDS, tagById } from './categories.js?v=e7992f0abd';
+import { CATEGORY_IDS, TAG_IDS, tagById } from './categories.js?v=c0b11e0890';
 
 const TAG_MIN = -3, TAG_MAX = 3;
 
@@ -178,7 +178,7 @@ export function placeSponsored(list, sponsored, prefs, { dismissed = new Set(), 
 }
 
 // The library key for an interest, the same as the Worker's interestKey
-// (src/explore.js?v=e7992f0abd; a test keeps them equal).
+// (src/explore.js?v=c0b11e0890; a test keeps them equal).
 export function interestKeyOf(text) {
   const s = String(text || '').normalize('NFKC').trim().replace(/\s+/g, ' ');
   if (s.length < 2 || s.length > 60) return null;

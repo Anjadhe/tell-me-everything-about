@@ -9,7 +9,7 @@
 
 import { merge, normalize, sameState } from '../public/merge.js';
 import { ENGINE_IDS, LAUNCH_FROM, tagRows, lastDays } from './usage.js';
-import { generate, evergreenFeed, sponsoredCard, interestKey, generateInterest, PACK_FRESH_DAYS } from './explore.js';
+import { generate, evergreenFeed, sponsoredCard, pinnedCard, interestKey, generateInterest, PACK_FRESH_DAYS, adminCard, rowForEditor } from './explore.js';
 
 const SESSION_COOKIE = 'tmea_session';
 const SESSION_DAYS = 90;
@@ -69,6 +69,7 @@ async function route(request, env, ctx, url) {
   if (pathname === '/api/admin/explore' && method === 'POST') return adminExplore(request, env);
   if (pathname === '/api/sponsored' && method === 'POST') return countSponsored(request, env, ctx);
   if (pathname === '/api/interest' && method === 'POST') return interestCards(request, env, ctx);
+  if (pathname === '/api/admin/cards') return adminCards(request, env, url);
   return json({ error: 'Not found.' }, 404);
 }
 
@@ -223,10 +224,17 @@ function bump(env, day, kind, key) {
   ).bind(day, kind, key).run();
 }
 
-async function adminUsage(request, env) {
+// null when the request carries the admin key, otherwise the response to send.
+async function adminRefusal(request, env) {
   if (!env.ADMIN_KEY) return json({ error: 'ADMIN_KEY is not set on the Worker.' }, 503);
   const given = request.headers.get('x-admin-key') || '';
   if (!(await timingSafeEqualString(given, env.ADMIN_KEY))) return json({ error: 'Wrong key.' }, 401);
+  return null;
+}
+
+async function adminUsage(request, env) {
+  const refused = await adminRefusal(request, env);
+  if (refused) return refused;
 
   const days = lastDays(14);
   const since = days[0];
@@ -325,12 +333,14 @@ async function getExplore(request, env, ctx) {
   if (hit) return hit;
 
   const day = today();
-  const [latest, campaigns] = await env.DB.batch([
+  const [latest, campaigns, pins] = await env.DB.batch([
     env.DB.prepare('SELECT data FROM explore ORDER BY day DESC LIMIT 1'),
     env.DB.prepare('SELECT * FROM sponsored WHERE active = 1 AND (starts IS NULL OR starts <= ?) AND (ends IS NULL OR ends >= ?) ORDER BY id').bind(day, day),
+    env.DB.prepare('SELECT * FROM pinned WHERE active = 1 AND (starts IS NULL OR starts <= ?) AND (ends IS NULL OR ends >= ?) ORDER BY position, id').bind(day, day),
   ]);
   const feed = latest.results[0] ? JSON.parse(latest.results[0].data) : evergreenFeed(day);
   feed.sponsored = campaigns.results.map(sponsoredCard).filter(Boolean);
+  feed.pinned = pins.results.map(pinnedCard).filter(Boolean);
   const body = JSON.stringify(feed);
   const res = new Response(body, {
     headers: {
@@ -440,7 +450,7 @@ async function withinCaps(env, request) {
 // A first pack for what was typed. Claude also says what the interest is
 // usually called; if the library already has a pack under that name, this
 // way of typing it becomes an alias and the existing pack is used, so
-// "History of India" and "Indian history" share one set of cards.
+// "History of Rome" and "Roman history" share one set of cards.
 async function newPack(env, key, text) {
   const pack = await generateInterest(env, key, text);
   const canonical = pack.suitable ? interestKey(pack.name) : null;
@@ -486,11 +496,134 @@ async function popularPackCards(env, day) {
   return out;
 }
 
+// ---------- the card manager ----------
+
+// /api/admin/cards, for /admin/cards. GET lists a collection; PUT saves one
+// card (a new one when no id is given); DELETE removes one card, or a whole
+// interest pack. Daily lists and packs are JSON in their rows; sponsored and
+// pinned cards are rows of their own. Every save is checked like a
+// generated card (adminCard).
+async function adminCards(request, env, url) {
+  const refused = await adminRefusal(request, env);
+  if (refused) return refused;
+  const method = request.method;
+  if (method === 'GET') return listCards(env, url.searchParams);
+  if (method !== 'PUT' && method !== 'DELETE') return json({ error: 'Not found.' }, 404);
+  const body = await readJson(request);
+  if (!body || typeof body !== 'object') return json({ error: 'Send a JSON body.' }, 400);
+  const res = method === 'PUT' ? await saveCard(env, body) : await removeCard(env, body);
+  if (res.status < 300) await caches.default.delete(new Request(new URL('/api/explore', request.url).toString()));
+  return res;
+}
+
+async function listCards(env, q) {
+  const collection = q.get('collection');
+  if (collection === 'daily') {
+    const days = (await env.DB.prepare('SELECT day FROM explore ORDER BY day DESC LIMIT 30').all()).results.map(r => r.day);
+    const day = days.includes(q.get('day')) ? q.get('day') : days[0] || null;
+    const row = day ? await env.DB.prepare('SELECT data FROM explore WHERE day = ?').bind(day).first() : null;
+    return json({ days, day, cards: row ? JSON.parse(row.data).cards : [] });
+  }
+  if (collection === 'packs') {
+    const rows = (await env.DB.prepare('SELECT key, name, suitable, hits, created_at, data, alias_of FROM interest_packs ORDER BY hits DESC, key').all()).results;
+    const aliases = {};
+    for (const r of rows) if (r.alias_of) (aliases[r.alias_of] ||= []).push(r.key);
+    return json({
+      packs: rows.filter(r => !r.alias_of).map(r => ({
+        key: r.key, name: r.name, suitable: !!r.suitable, hits: r.hits, createdAt: r.created_at,
+        cards: (() => { try { return JSON.parse(r.data).length; } catch { return 0; } })(),
+        aliases: aliases[r.key] || [],
+      })),
+    });
+  }
+  if (collection === 'pack') {
+    const r = await env.DB.prepare('SELECT * FROM interest_packs WHERE key = ? AND alias_of IS NULL').bind(q.get('key') || '').first();
+    if (!r) return json({ error: 'No such pack.' }, 404);
+    return json({ key: r.key, name: r.name, suitable: !!r.suitable, cards: JSON.parse(r.data) });
+  }
+  if (collection === 'sponsored' || collection === 'pinned') {
+    const order = collection === 'pinned' ? 'position, id' : 'id';
+    const rows = (await env.DB.prepare(`SELECT * FROM ${collection} ORDER BY ${order}`).all()).results;
+    return json({ cards: rows.map(r => rowForEditor(r, collection)) });
+  }
+  return json({ error: 'Unknown collection.' }, 400);
+}
+
+async function saveCard(env, body) {
+  const { collection, id } = body;
+  const checked = adminCard(body.card, collection, { id });
+  if (checked.error) return json({ error: checked.error }, 400);
+  if (collection === 'daily' || collection === 'pack') {
+    const isDaily = collection === 'daily';
+    const row = isDaily
+      ? await env.DB.prepare('SELECT data FROM explore WHERE day = ?').bind(body.day || '').first()
+      : await env.DB.prepare('SELECT data, name FROM interest_packs WHERE key = ? AND alias_of IS NULL').bind(body.key || '').first();
+    if (!row) return json({ error: isDaily ? 'No list for that day.' : 'No such pack.' }, 404);
+    const data = JSON.parse(row.data);
+    const cards = isDaily ? data.cards : data;
+    let card = checked.card;
+    if (!isDaily) card = { ...card, pack: body.key, packName: row.name, id: id || `in-${body.key}-${card.id}`.slice(0, 90) };
+    const at = id ? cards.findIndex(c => c.id === id) : -1;
+    if (id && at < 0) return json({ error: 'That card is no longer there. Reload the list.' }, 409);
+    if (!id && cards.some(c => c.id === card.id)) return json({ error: 'There is already a card with that topic.' }, 409);
+    if (at >= 0) cards[at] = card; else cards.unshift(card);
+    if (isDaily) await env.DB.prepare('UPDATE explore SET data = ? WHERE day = ?').bind(JSON.stringify(data), body.day).run();
+    else await env.DB.prepare('UPDATE interest_packs SET data = ? WHERE key = ?').bind(JSON.stringify(cards), body.key).run();
+    return json({ ok: true, card });
+  }
+  const r = checked.row;
+  if (!id) {
+    const exists = await env.DB.prepare(`SELECT id FROM ${collection} WHERE id = ?`).bind(r.id).first();
+    if (exists) return json({ error: 'There is already a card with that id. Give this one another.' }, 409);
+  }
+  if (collection === 'sponsored') {
+    await env.DB.prepare(
+      'INSERT OR REPLACE INTO sponsored (id, sponsor, topic, hook, category, tags, angle, figure, figure_label, url, starts, ends, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(r.id, r.sponsor, r.topic, r.hook, r.category, r.tags, r.angle, r.figure, r.figure_label, r.url, r.starts, r.ends, r.active).run();
+  } else {
+    await env.DB.prepare(
+      'INSERT OR REPLACE INTO pinned (id, topic, hook, category, tags, kind, depth, surprise, angle, figure, figure_label, position, starts, ends, active, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(r.id, r.topic, r.hook, r.category, r.tags, r.kind, r.depth, r.surprise, r.angle, r.figure, r.figure_label, r.position, r.starts, r.ends, r.active, new Date().toISOString()).run();
+  }
+  return json({ ok: true, id: r.id });
+}
+
+async function removeCard(env, body) {
+  const { collection, id } = body;
+  if (collection === 'pack' && body.whole) {
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM interest_packs WHERE key = ?').bind(body.key || ''),
+      env.DB.prepare('DELETE FROM interest_packs WHERE alias_of = ?').bind(body.key || ''),
+    ]);
+    return json({ ok: true });
+  }
+  if (!id) return json({ error: 'Which card?' }, 400);
+  if (collection === 'daily' || collection === 'pack') {
+    const isDaily = collection === 'daily';
+    const row = isDaily
+      ? await env.DB.prepare('SELECT data FROM explore WHERE day = ?').bind(body.day || '').first()
+      : await env.DB.prepare('SELECT data FROM interest_packs WHERE key = ? AND alias_of IS NULL').bind(body.key || '').first();
+    if (!row) return json({ error: 'Not found.' }, 404);
+    const data = JSON.parse(row.data);
+    if (isDaily) {
+      data.cards = data.cards.filter(c => c.id !== id);
+      await env.DB.prepare('UPDATE explore SET data = ? WHERE day = ?').bind(JSON.stringify(data), body.day).run();
+    } else {
+      await env.DB.prepare('UPDATE interest_packs SET data = ? WHERE key = ?').bind(JSON.stringify(data.filter(c => c.id !== id)), body.key).run();
+    }
+    return json({ ok: true });
+  }
+  if (collection === 'sponsored' || collection === 'pinned') {
+    await env.DB.prepare(`DELETE FROM ${collection} WHERE id = ?`).bind(id).run();
+    return json({ ok: true });
+  }
+  return json({ error: 'Unknown collection.' }, 400);
+}
+
 // Run the daily job now, for the first deploy or after changing the prompt.
 async function adminExplore(request, env) {
-  if (!env.ADMIN_KEY) return json({ error: 'ADMIN_KEY is not set on the Worker.' }, 503);
-  const given = request.headers.get('x-admin-key') || '';
-  if (!(await timingSafeEqualString(given, env.ADMIN_KEY))) return json({ error: 'Wrong key.' }, 401);
+  const refused = await adminRefusal(request, env);
+  if (refused) return refused;
   try {
     const result = await refreshExplore(env);
     // The edge cache is per location; this clears the one serving the admin,

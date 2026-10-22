@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cards · Tell me everything about</title>
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/app.css?v=c0b11e0890">
+<script>try{var t=localStorage.getItem('tmea:theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
+<style>
+  .cm { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 40px; align-items: start; width: min(100%, 1120px); margin: 20px auto 60px; }
+  .cm h1 { font-family: var(--serif); font-weight: 400; font-size: 30px; letter-spacing: -0.015em; margin: 0 0 14px; }
+  .cm-nav { position: sticky; top: 20px; display: grid; gap: 2px; }
+  .cm-nav .pp-item { padding-right: 12px; }
+  .cm-nav .group { margin: 14px 0 4px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); padding: 0 12px; }
+  .cm-nav select { margin: 2px 12px 6px; border: 1px solid var(--line-2); background: var(--surface); border-radius: 6px; padding: 4px 8px; font-size: 12.5px; }
+  .cm-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+  .cm-head h2 { font-family: var(--serif); font-weight: 400; font-size: 26px; margin: 0; letter-spacing: -0.01em; }
+  .cm-head .count { color: var(--ink-3); font-size: 12.5px; }
+  .cm-head .actions { margin-left: auto; display: flex; gap: 8px; }
+  .cm-note { color: var(--ink-2); font-size: 12.5px; margin: 0 0 14px; max-width: 70ch; }
+  .cm-search { width: min(100%, 360px); margin-bottom: 12px; }
+  .cm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .cm-row { display: grid; grid-template-columns: 54px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 8px 10px 8px 8px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
+  .cm-row.off { opacity: .55; }
+  .cm-swatch { width: 54px; height: 40px; border-radius: 6px; overflow: hidden; background: oklch(var(--cover-l) var(--cover-c) var(--h)); color: oklch(var(--motif-l) var(--motif-c) var(--h)); position: relative; }
+  .cm-swatch svg { width: 100%; height: 100%; display: block; }
+  .cm-text { min-width: 0; display: grid; gap: 1px; }
+  .cm-text .t { font-family: var(--serif); font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cm-text .h { color: var(--ink-2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cm-text .m { color: var(--ink-3); font-size: 11px; }
+  .cm-text .m b { color: oklch(var(--kick-l) var(--kick-c) var(--h)); font-weight: 600; }
+  .cm-row .acts { display: flex; gap: 4px; }
+  .cm-empty { color: var(--ink-2); padding: 18px 2px; }
+  .cm-error { color: var(--danger); font-size: 12.5px; min-height: 18px; margin: 6px 0; }
+
+  /* Editor: a sheet with the live card on top. */
+  .editor-sheet { width: min(100%, 560px); }
+  .editor-sheet .sheet-body { padding-bottom: 0; }
+  /* The sheet's small heading style must not reach the card's title. */
+  .ce-preview .card-title { font-size: 19px; font-weight: 400; color: var(--ink); margin: 0; letter-spacing: -0.01em; }
+  .ce-preview { margin: 14px 0 18px; max-width: 340px; }
+  .ce-preview .card { pointer-events: none; }
+  .ce-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+  .ce-field { display: grid; gap: 5px; }
+  .ce-field.wide { grid-column: 1 / -1; }
+  .ce-field label, .ce-field .lbl { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); display: flex; justify-content: space-between; }
+  .ce-field .n { font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--ink-3); }
+  .ce-field .n.over { color: var(--danger); }
+  .ce-field input, .ce-field textarea, .ce-field select { width: 100%; border: 1px solid var(--line-2); background: var(--surface); border-radius: 8px; padding: 7px 10px; font-size: 13.5px; }
+  .ce-field textarea { resize: vertical; min-height: 60px; font-family: var(--serif); font-size: 15px; line-height: 1.4; }
+  .ce-field input.serif { font-family: var(--serif); font-size: 16px; }
+  .ce-field input:focus, .ce-field textarea:focus, .ce-field select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .ce-tags { display: grid; gap: 6px; }
+  .ce-tags .row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  .ce-tags .cat { width: 78px; font-size: 11px; color: oklch(var(--kick-l) var(--kick-c) var(--h)); }
+  .ce-tags .chip { font-size: 11.5px; padding: 2px 9px 2px 7px; }
+  .ce-check { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .ce-field .ce-check input.switch { width: 32px; height: 18px; padding: 0; border: 0; box-shadow: none; }
+  .ce-foot { position: sticky; bottom: 0; background: var(--surface); border-top: 1px solid var(--line); margin: 20px -26px 0; padding: 12px 26px; display: flex; gap: 8px; align-items: center; }
+  .ce-foot .danger { margin-left: auto; }
+  @media (max-width: 760px) { .cm { grid-template-columns: 1fr; } .cm-nav { position: static; } .ce-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body class="page-prompts">
+
+<header class="top">
+  <a class="brand" href="/" aria-label="Tell me everything about">
+    <svg width="14" height="14" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="currentColor"/><path d="M8 22.5V9.5h2.2v11.2H17v1.8z" fill="var(--ground)"/><circle cx="22.5" cy="21" r="2" fill="var(--accent)"/></svg>
+    <span>tell me everything about</span>
+  </a>
+  <nav class="top-actions">
+    <a class="quiet" href="/admin">Usage</a>
+    <button type="button" id="lock" class="quiet" hidden>Lock</button>
+  </nav>
+</header>
+
+<main>
+  <section id="gate" class="cm" hidden>
+    <div></div>
+    <div>
+      <h1>Cards</h1>
+      <p class="cm-note">Enter the admin key to manage Explore's cards. It stays in this browser.</p>
+      <form id="gate-form" class="field" style="max-width: 420px">
+        <input type="password" id="key" placeholder="Admin key" autocomplete="current-password" required>
+        <button type="submit" class="pill solid">Open</button>
+      </form>
+      <p id="gate-err" class="cm-error"></p>
+    </div>
+  </section>
+
+  <section id="manager" class="cm" hidden>
+    <nav class="cm-nav" aria-label="Collections">
+      <h1>Cards</h1>
+      <span class="group">Shown to everyone</span>
+      <a class="pp-item" href="#daily" data-c="daily"><span class="n">Daily lists</span><span class="s" id="n-daily"></span></a>
+      <select id="day" aria-label="Day" hidden></select>
+      <a class="pp-item" href="#pinned" data-c="pinned"><span class="n">Pinned</span><span class="s">Editor’s picks, on top</span></a>
+      <a class="pp-item" href="#sponsored" data-c="sponsored"><span class="n">Sponsored</span><span class="s">Labelled, placed in browsers</span></a>
+      <span class="group">Interests</span>
+      <a class="pp-item" href="#packs" data-c="packs"><span class="n">Interest packs</span><span class="s" id="n-packs"></span></a>
+    </nav>
+
+    <div>
+      <header class="cm-head">
+        <h2 id="title"></h2>
+        <span class="count" id="count"></span>
+        <div class="actions" id="actions"></div>
+      </header>
+      <p class="cm-note" id="note"></p>
+      <input type="search" id="search" class="ed-input cm-search" placeholder="Find a card" aria-label="Find a card">
+      <p class="cm-error" id="list-error" role="alert"></p>
+      <ol class="cm-list" id="list"></ol>
+    </div>
+  </section>
+</main>
+
+<dialog id="editor" class="sheet editor-sheet" aria-labelledby="ce-title">
+  <form id="ce-form" class="sheet-body" method="dialog">
+    <header class="sheet-head">
+      <h2 id="ce-title">Card</h2>
+      <button type="button" class="quiet" id="ce-close">Close</button>
+    </header>
+    <div class="ce-preview" id="ce-preview" aria-hidden="true"></div>
+    <div class="ce-grid" id="ce-fields"></div>
+    <p class="cm-error" id="ce-error" role="alert"></p>
+    <footer class="ce-foot">
+      <button type="submit" class="pill solid" id="ce-save">Save</button>
+      <button type="button" class="quiet" id="ce-cancel">Cancel</button>
+      <button type="button" class="quiet danger" id="ce-delete">Delete card</button>
+    </footer>
+  </form>
+</dialog>
+
+<script type="module" src="/admin-cards.js?v=c0b11e0890"></script>
+</body>
+</html>

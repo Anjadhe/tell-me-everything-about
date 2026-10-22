@@ -8,7 +8,7 @@
 // first box instead.
 //
 // Which cards, in what order, is decided here in the browser from the
-// visitor's preferences (interests.js?v=e7992f0abd). Feedback hides or nudges without
+// visitor's preferences (interests.js?v=c0b11e0890). Feedback hides or nudges without
 // reshuffling what is on screen: the order is fixed until the visitor picks
 // another pill, finishes the picker, or comes back later.
 //
@@ -16,8 +16,8 @@
 // for science, strata for history, …), varied by a seed from the topic so no
 // two look alike, with the card's one striking figure set large on top.
 
-import { CATEGORIES, categoryById, tagById, ORIGINS, KINDS, DEPTHS, STEPS } from './categories.js?v=e7992f0abd';
-import { rank, feedback, placeSponsored } from './interests.js?v=e7992f0abd';
+import { CATEGORIES, categoryById, tagById, ORIGINS, KINDS, DEPTHS, STEPS } from './categories.js?v=c0b11e0890';
+import { rank, feedback, placeSponsored, hidden } from './interests.js?v=c0b11e0890';
 
 // Three rows to start (the wide lead card, then three and three); each
 // "Show more" adds two rows under them.
@@ -86,6 +86,17 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     return [...kept, ...added];
   }
 
+  // Cards pinned in the card manager lead For you and their category,
+  // unless the visitor has set them aside or hidden what they are about.
+  function withPinned(list) {
+    const p = prefs();
+    const dismissed = readDismissed();
+    const pins = (feed.pinned || []).filter(c => !dismissed.has(c.id) && !hidden(c, p) && (!pill || c.category === pill));
+    if (!pins.length) return list;
+    const ids = new Set(pins.map(c => c.id));
+    return [...pins, ...list.filter(c => !ids.has(c.id))];
+  }
+
   function refresh() {
     frozen = null;
     count = FIRST;
@@ -98,7 +109,7 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     if (!feed) { renderSkeleton(); return; }
     renderPills();
     const own = pill === 'saved' || packOf();
-    const list = own ? ordered() : placeSponsored(ordered(), feed.sponsored || [], prefs(), { dismissed: readDismissed(), category: pill });
+    const list = own ? ordered() : placeSponsored(withPinned(ordered()), feed.sponsored || [], prefs(), { dismissed: readDismissed(), category: pill });
     shown = list.slice(0, count);
     cardsEl.innerHTML = '';
     cardsEl.removeAttribute('aria-busy');
@@ -316,7 +327,7 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     body.className = 'card-body';
     const kicker = document.createElement('span');
     kicker.className = 'kicker';
-    const second = c.packName
+    const second = c.pinned ? 'Editor’s pick' : c.packName
       ? (packOf() ? STEPS[c.step] || c.packName : c.packName)
       : KINDS[c.kind] || (c.origin !== 'timeless' ? ORIGINS[c.origin] : '');
     kicker.textContent = c.sponsored ? `Sponsored · ${c.sponsor}` : cat.name + (second ? ` · ${second}` : '');
@@ -614,7 +625,8 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
 
   return {
     setFeed(next) {
-      const changed = !feed || next.day !== feed.day || next.cards.length !== feed.cards.length || next.cards.some((c, i) => c.id !== feed.cards[i]?.id) || (next.sponsored || []).map(c => c.id).join() !== (feed.sponsored || []).map(c => c.id).join();
+      const ids = f => [...f.cards, ...(f.sponsored || []), ...(f.pinned || [])].map(c => `${c.id}:${c.topic}:${c.hook}:${c.figure}`).join('|');
+      const changed = !feed || next.day !== feed.day || ids(next) !== ids(feed);
       feed = next;
       if (changed) refresh();
     },

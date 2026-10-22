@@ -3,14 +3,14 @@
 //
 // Everything saves as you type. A new prompt is kept once it has words.
 
-import * as store from './store.js?v=e7992f0abd';
-import { ENGINES, engineById } from './engines.js?v=e7992f0abd';
-import { describe, AUTO_FILLS, autoValues, fill, defaultLabel, highlight, parse } from './template.js?v=e7992f0abd';
-import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=e7992f0abd';
-import { CATEGORIES, categoryById, KINDS } from './categories.js?v=e7992f0abd';
-import { prefsFrom, tagState, cycleTag } from './interests.js?v=e7992f0abd';
-import { forgetLocal } from './explore.js?v=e7992f0abd';
-import { packsFor, ensurePacks, retryPack } from './packs.js?v=e7992f0abd';
+import * as store from './store.js?v=c0b11e0890';
+import { ENGINES, engineById } from './engines.js?v=c0b11e0890';
+import { describe, AUTO_FILLS, autoValues, fill, defaultLabel, highlight, parse } from './template.js?v=c0b11e0890';
+import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=c0b11e0890';
+import { CATEGORIES, categoryById, KINDS } from './categories.js?v=c0b11e0890';
+import { prefsFrom, tagState, cycleTag } from './interests.js?v=c0b11e0890';
+import { forgetLocal } from './explore.js?v=c0b11e0890';
+import { packsFor, ensurePacks, retryPack } from './packs.js?v=c0b11e0890';
 
 const EXAMPLES = [
   { label: 'Compare', template: 'Compare {thing} with {other thing}: how they differ, where each one wins, and which to choose when' },

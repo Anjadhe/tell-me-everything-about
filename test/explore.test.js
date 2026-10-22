@@ -279,3 +279,51 @@ test('a topic set remembers what it has seen', () => {
   assert.equal(t.add('Linear B'), true);
   assert.equal(t.has('linear b'), true);
 });
+
+import { adminCard, pinnedCard, rowForEditor, rowId } from '../src/explore.js';
+
+const handMade = (over = {}) => ({ topic: 'Rocket stoves', hook: 'Cooking with a handful of twigs.', category: 'technology', tags: ['engineering'], kind: 'topic', depth: 'quick', surprise: 'familiar', angle: 'Why do they burn so cleanly?', figure: '', figureLabel: '', ...over });
+
+test('the card manager checks a card like a generated one', () => {
+  assert.match(adminCard({ topic: '', hook: 'x', category: 'science' }, 'daily').error, /topic, a hook/);
+  assert.match(adminCard(handMade(), 'nowhere').error, /Unknown collection/);
+  const { card } = adminCard(handMade({ topic: '  Rocket stoves. ', tags: ['engineering', 'nope'] }), 'daily');
+  assert.equal(card.topic, 'Rocket stoves');
+  assert.deepEqual(card.tags, ['engineering']);
+});
+
+test('an edited card keeps its id; daily cards keep their origin, pack cards their step', () => {
+  assert.equal(adminCard(handMade({ topic: 'A new title' }), 'daily', { id: 'old-id' }).card.id, 'old-id');
+  assert.equal(adminCard(handMade({ origin: 'news' }), 'daily').card.origin, 'news');
+  assert.equal(adminCard(handMade({ origin: 'news' }), 'pack').card.origin, 'timeless');
+  assert.equal(adminCard(handMade({ step: 'rabbithole' }), 'pack').card.step, 'rabbithole');
+  assert.equal(adminCard(handMade({ step: 'x' }), 'pack').card.step, 'deeper');
+  const carried = adminCard(handMade({ carried: true, day: '2026-10-20' }), 'daily', { id: 'c' }).card;
+  assert.equal(carried.carried, true);
+  assert.equal(carried.day, '2026-10-20');
+});
+
+test('sponsored and pinned rows are checked: sponsor, https link, dates, id', () => {
+  assert.match(adminCard(handMade(), 'sponsored').error, /sponsor/);
+  assert.match(adminCard(handMade({ sponsor: 'Acme', url: 'http://acme.example' }), 'sponsored').error, /https/);
+  assert.match(adminCard(handMade({ starts: '21/10/2026' }), 'pinned').error, /YYYY-MM-DD/);
+  assert.match(adminCard(handMade({ starts: '2026-11-02', ends: '2026-11-01' }), 'pinned').error, /before the start/);
+  assert.equal(adminCard(handMade({ rowId: 'Bad Id!' }), 'pinned').row.id, 'bad-id');
+  assert.match(adminCard(handMade(), 'pinned', { id: 'Bad Id' }).error, /a–z/);
+  const s = adminCard(handMade({ sponsor: 'Acme', url: 'https://acme.example/x', starts: '2026-11-01' }), 'sponsored').row;
+  assert.deepEqual([s.id, s.sponsor, s.url, s.starts, s.ends, s.active, s.tags], ['rocket-stoves', 'Acme', 'https://acme.example/x', '2026-11-01', null, 1, '["engineering"]']);
+  const p = adminCard(handMade({ position: '2', active: false, kind: 'myth' }), 'pinned').row;
+  assert.deepEqual([p.position, p.active, p.kind], [2, 0, 'myth']);
+  assert.equal(rowId('  The Ünïcode Café — and more!  '), 'the-unicode-cafe-and-more');
+});
+
+test('a pinned row becomes a card on the page, and back for the editor', () => {
+  const { row } = adminCard(handMade({ figure: '1909', figureLabel: 'first one', position: 1 }), 'pinned');
+  const card = pinnedCard(row);
+  assert.equal(card.id, 'pin-rocket-stoves');
+  assert.equal(card.pinned, true);
+  assert.equal(card.figureLabel, 'first one');
+  const back = rowForEditor(row, 'pinned');
+  assert.deepEqual([back.topic, back.tags, back.position, back.active, back.figureLabel], ['Rocket stoves', ['engineering'], 1, true, 'first one']);
+  assert.equal(pinnedCard({ ...row, id: 'Bad Id' }), null);
+});
