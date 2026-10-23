@@ -369,6 +369,7 @@ async function loadFeed() {
 // a layer of exactly the same size, with the type made smaller until it
 // fits, so the page never moves however long the topic is.
 function preview(kind, text) {
+  if (!sentenceInView()) { clearPreview(); return; }
   previewing = kind;
   previewEl.replaceChildren();
   if (kind === 'question') {
@@ -388,6 +389,14 @@ function preview(kind, text) {
   previewEl.hidden = false;
   sentenceEl.classList.add('under-preview');
   fitPreview();
+}
+
+// Safari scrolls back to the focused box whenever anything repaints over or
+// beside it, so from further down the page a hover or a new suggestion would
+// yank the page up. Neither is worth showing where no one can see it.
+function sentenceInView() {
+  const r = sentenceEl.getBoundingClientRect();
+  return r.top >= 0 && r.bottom <= innerHeight;
 }
 
 function fitPreview() {
@@ -455,7 +464,7 @@ function primeSuggestion() {
 }
 
 setInterval(() => {
-  if (previewing || inputs[0]?.value || document.hidden || !exploreOn() || !explore) return;
+  if (previewing || inputs[0]?.value || document.hidden || !exploreOn() || !explore || !sentenceInView()) return;
   const list = single() ? explore.topics() : [];
   if (!list.length) { setSuggestion(''); return; }
   suggestAt = (suggestAt + 1) % list.length;
