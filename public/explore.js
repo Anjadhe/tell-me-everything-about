@@ -8,7 +8,7 @@
 // first box instead.
 //
 // Which cards, in what order, is decided here in the browser from the
-// visitor's preferences (interests.js?v=ce4a88d427). Feedback hides or nudges without
+// visitor's preferences (interests.js?v=c133954c60). Feedback hides or nudges without
 // reshuffling what is on screen: the order is fixed until the visitor picks
 // another pill or comes back later.
 //
@@ -16,8 +16,8 @@
 // for science, strata for history, …), varied by a seed from the topic so no
 // two look alike, with the card's one striking figure set large on top.
 
-import { CATEGORIES, categoryById, tagById, ORIGINS, KINDS, DEPTHS, isNews } from './categories.js?v=ce4a88d427';
-import { rank, placeSponsored, visible, setCategory, setTag, topicsValue } from './interests.js?v=ce4a88d427';
+import { CATEGORIES, categoryById, tagById, ORIGINS, KINDS, DEPTHS, isNews } from './categories.js?v=c133954c60';
+import { rank, placeSponsored, visible, setCategory, setTag, topicsValue } from './interests.js?v=c133954c60';
 
 // Three rows to start (the wide lead card, then three and three); each
 // "Show more" adds two rows under them.
