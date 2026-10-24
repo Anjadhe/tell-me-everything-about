@@ -1,17 +1,17 @@
 // Tell me everything about — the home page: a sentence to finish.
 //
-// State, sync and the account live in store.js?v=c133954c60, shared with the prompts
+// State, sync and the account live in store.js?v=98c9fd8e4d, shared with the prompts
 // settings page (/settings), where prompts are written and settings kept. This page
 // draws the selected prompt as a sentence with a box for each blank, launches
 // it, and shows Explore under it.
 
-import * as store from './store.js?v=c133954c60';
-import { ENGINES, engineById } from './engines.js?v=c133954c60';
-import { parse, fill, autoValues } from './template.js?v=c133954c60';
-import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=c133954c60';
-import { createExplore } from './explore.js?v=c133954c60';
-import { prefsFrom } from './interests.js?v=c133954c60';
-import { withContext, cardContext } from './context.js?v=c133954c60';
+import * as store from './store.js?v=98c9fd8e4d';
+import { ENGINES, engineById } from './engines.js?v=98c9fd8e4d';
+import { parse, fill, autoValues } from './template.js?v=98c9fd8e4d';
+import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=98c9fd8e4d';
+import { createExplore } from './explore.js?v=98c9fd8e4d';
+import { prefsFrom } from './interests.js?v=98c9fd8e4d';
+import { withContext, cardContext } from './context.js?v=98c9fd8e4d';
 
 const FEED_KEY = 'tmea:explore-feed';
 // A copy fetched this recently is not asked for again (rapid reloads).
@@ -398,7 +398,7 @@ function clearPreview() {
 
 // The first box's grey text: the blank's name, or the current suggestion.
 // A suggestion sits in a box of fixed width, smaller and on one line, so a
-// long topic can never rewrap the sentence and move the page (app.css?v=c133954c60).
+// long topic can never rewrap the sentence and move the page (app.css?v=98c9fd8e4d).
 function paintGhost() {
   const ghost = ghostOf(inputs[0]);
   if (!ghost) return;

@@ -6,13 +6,13 @@
 //
 // Everything saves as you type. A new prompt is kept once it has words.
 
-import * as store from './store.js?v=c133954c60';
-import { ENGINES, engineById } from './engines.js?v=c133954c60';
-import { describe, AUTO_FILLS, autoValues, fill, defaultLabel, highlight, parse } from './template.js?v=c133954c60';
-import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=c133954c60';
-import { CATEGORIES, categoryById, KINDS } from './categories.js?v=c133954c60';
-import { prefsFrom, topicsValue, setCategory, setTag, DEFAULT_TOPICS } from './interests.js?v=c133954c60';
-import { withContext } from './context.js?v=c133954c60';
+import * as store from './store.js?v=98c9fd8e4d';
+import { ENGINES, engineById } from './engines.js?v=98c9fd8e4d';
+import { describe, AUTO_FILLS, autoValues, fill, defaultLabel, highlight, parse } from './template.js?v=98c9fd8e4d';
+import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=98c9fd8e4d';
+import { CATEGORIES, categoryById, KINDS } from './categories.js?v=98c9fd8e4d';
+import { prefsFrom, topicsValue, setCategory, setTag, DEFAULT_TOPICS } from './interests.js?v=98c9fd8e4d';
+import { withContext } from './context.js?v=98c9fd8e4d';
 
 const EXAMPLES = [
   { label: 'Compare', template: 'Compare {thing} with {other thing}: how they differ, where each one wins, and which to choose when' },
