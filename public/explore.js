@@ -50,6 +50,8 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
   document.body.appendChild(toast);
 
   let feed = null;
+  // The card each of its links asks about, for the context it adds.
+  const cardOf = new WeakMap();
   let count = FIRST;
   let shown = [];
   let pill = null;        // a category, 'news', 'saved', or null for "For you"
@@ -124,7 +126,7 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     moreBtn.hidden = list.length <= shown.length;
     dateEl.textContent = feed.source === 'daily' ? formatDay(feed.day) : '';
     footEl.textContent = feed.source === 'daily'
-      ? "Chosen this morning by Claude from Wikipedia, Hacker News, Reddit's Today I Learned and sources for each category, then ordered for you in this browser. Each card opens with the prompt you have selected above."
+      ? "Chosen this morning by tmea from Wikipedia, Hacker News, Reddit's Today I Learned and sources for each category, then ordered for you in this browser. Each card opens with the prompt you have selected above."
       : 'A few timeless places to start. Each card opens with the prompt you have selected above.';
   }
 
@@ -225,6 +227,7 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     main.className = 'card-link';
     main.dataset.kind = 'card';
     main.dataset.text = c.topic;
+    cardOf.set(main, c);
     aim(main);
 
     const cover = document.createElement('div');
@@ -278,6 +281,7 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
       q.dataset.text = c.angle;
       q.dataset.topic = c.topic;
       q.textContent = c.angle;
+      cardOf.set(q, c);
       aim(q);
       foot.appendChild(q);
     }
@@ -339,7 +343,7 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
   }
 
   function aim(a) {
-    const { href, target, fill: fills } = link(a.dataset.text, a.dataset.kind);
+    const { href, target, fill: fills } = link(a.dataset.text, a.dataset.kind, cardOf.get(a));
     a.href = fills ? '#ask' : href;
     a.toggleAttribute('data-fill', !!fills);
     if (target && !fills) { a.target = target; a.rel = 'noopener'; } else { a.removeAttribute('target'); a.removeAttribute('rel'); }
@@ -491,7 +495,7 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     const a = e.target.closest?.('a[data-kind]');
     if (!a || !root.contains(a)) return;
     previewing = a;
-    preview(a.dataset.kind === 'angle' ? 'question' : 'topic', a.dataset.text);
+    preview(a.dataset.kind === 'angle' ? 'question' : 'topic', a.dataset.text, cardOf.get(a));
   };
   const out = e => {
     if (!previewing) return;
@@ -544,7 +548,8 @@ export function createExplore({ root, link, fill, preview, clearPreview, launche
     setFeed(next) {
       const ids = f => [...f.cards, ...(f.sponsored || []), ...(f.pinned || [])].map(c => `${c.id}:${c.topic}:${c.hook}:${c.figure}`).join('|');
       const changed = !feed || next.day !== feed.day || ids(next) !== ids(feed);
-      feed = next;
+      // A card written today says so; carried ones already know their day.
+      feed = { ...next, cards: next.cards.map(c => c.day ? c : { ...c, day: next.day }) };
       if (changed) refresh();
     },
     render,

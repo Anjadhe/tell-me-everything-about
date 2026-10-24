@@ -12,6 +12,7 @@ import { describe, AUTO_FILLS, autoValues, fill, defaultLabel, highlight, parse 
 import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=c133954c60';
 import { CATEGORIES, categoryById, KINDS } from './categories.js?v=c133954c60';
 import { prefsFrom, topicsValue, setCategory, setTag, DEFAULT_TOPICS } from './interests.js?v=c133954c60';
+import { withContext } from './context.js?v=c133954c60';
 
 const EXAMPLES = [
   { label: 'Compare', template: 'Compare {thing} with {other thing}: how they differ, where each one wins, and which to choose when' },
@@ -86,10 +87,14 @@ function showPrompts() {
 
 // The prompts as rows (each opens the editor, arrows reorder), the row to
 // start a new one, and the counts shown on the settings list.
+// Every prompt, each ticked or not: the ticked one is the home page's.
 function renderList() {
   const list = store.prompts();
+  const home = homePrompt()?.id;
   listEl.innerHTML = '';
-  list.forEach((p, i) => {
+  listEl.setAttribute('role', 'radiogroup');
+  listEl.setAttribute('aria-label', 'The prompt on your home page');
+  list.forEach(p => {
     const li = document.createElement('li');
     li.className = 'ios-split';
     const a = document.createElement('a');
@@ -100,13 +105,19 @@ function renderList() {
     a.innerHTML = '<span class="ios-name"></span><span class="ios-value"></span><span class="ios-chev" aria-hidden="true">›</span>';
     a.querySelector('.ios-name').textContent = name;
     a.querySelector('.ios-value').textContent = `${engineById(p.engine || store.setting('defaultEngine', 'google-ai')).name}${blanks > 1 ? ` · ${blanks} blanks` : ''}`;
-    const move = document.createElement('span');
-    move.className = 'ios-move';
-    move.append(
-      moveButton('up', `Move ${name} up`, i === 0, () => shift(p.id, -1)),
-      moveButton('down', `Move ${name} down`, i === list.length - 1, () => shift(p.id, 1)),
-    );
-    li.append(move, a);
+    const pick = document.createElement('button');
+    pick.type = 'button';
+    pick.className = 'ios-pick';
+    pick.setAttribute('role', 'radio');
+    pick.setAttribute('aria-checked', String(p.id === home));
+    pick.setAttribute('aria-label', `Use ${name} on the home page`);
+    pick.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg>';
+    pick.addEventListener('click', () => {
+      store.setSelectedId(p.id);
+      renderList();
+      listEl.querySelector('.ios-pick[aria-checked="true"]')?.focus();
+    });
+    li.append(pick, a);
     listEl.appendChild(li);
   });
   const full = list.length >= store.MAX_PROMPTS;
@@ -120,30 +131,6 @@ function renderList() {
   $('#v-saved').textContent = n ? String(n) : 'None yet';
 }
 
-function moveButton(dir, label, disabled, onClick) {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'icon';
-  b.disabled = disabled;
-  b.setAttribute('aria-label', label);
-  b.innerHTML = dir === 'up'
-    ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>'
-    : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
-  b.addEventListener('click', onClick);
-  return b;
-}
-
-function shift(id, dir) {
-  commit();
-  const ids = store.prompts().map(p => p.id);
-  const i = ids.indexOf(id), j = i + dir;
-  if (j < 0 || j >= ids.length) return;
-  [ids[i], ids[j]] = [ids[j], ids[i]];
-  store.reorder(ids);
-  renderList();
-  listEl.querySelectorAll('.ios-split')[j]?.querySelector(`.ios-move button:${dir < 0 ? 'first-child' : 'last-child'}:not(:disabled)`)?.focus();
-}
-
 // ---------- the editor ----------
 
 function showEditor(id) {
@@ -154,7 +141,6 @@ function showEditor(id) {
   tplEl.value = p?.template || '';
   engine = p?.engine || store.setting('defaultEngine', 'google-ai');
   for (const k of Object.keys(tried)) delete tried[k];
-  if (p) store.setSelectedId(p.id);
   $('#ed-foot').hidden = !p || store.prompts().length < 2;
   $('#ed-confirm').hidden = true;
   $('#ed-delete').hidden = false;
@@ -391,7 +377,6 @@ function commit() {
     const id = store.newId();
     store.upsertPrompt({ id, label, template, engine, order: store.prompts().length });
     currentId = id;
-    store.setSelectedId(id);
     history.replaceState(null, '', `#${encodeURIComponent(id)}`);
     $('#ed-foot').hidden = store.prompts().length < 2;
     saved();
@@ -428,9 +413,10 @@ $('#ed-delete-no').addEventListener('click', () => {
 });
 $('#ed-delete-yes').addEventListener('click', () => {
   if (!currentId) return;
+  const wasHome = homePrompt()?.id === currentId;
   store.deletePrompt(currentId);
   const next = store.prompts()[0];
-  if (next) store.setSelectedId(next.id);
+  if (wasHome && next) store.setSelectedId(next.id);
   // Empty the fields first: the hash change saves, and must find nothing.
   currentId = null;
   tplEl.value = '';
@@ -447,8 +433,8 @@ function showSaved() {
   renderList();
 }
 
-// The prompt the home page has selected, which a saved card asks with.
-function askingPrompt() {
+// The prompt the home page uses, which a saved card asks with too.
+function homePrompt() {
   const list = store.prompts();
   return list.find(p => p.id === store.selectedId()) || list[0] || null;
 }
@@ -465,7 +451,7 @@ function renderSaved() {
     list.appendChild(li);
     return;
   }
-  const p = askingPrompt();
+  const p = homePrompt();
   const tpl = p?.template || 'Tell me everything about {}';
   const { blanks } = parse(tpl);
   const engine = engineById(p?.engine || store.setting('defaultEngine', 'google-ai'));
@@ -491,7 +477,7 @@ function renderSaved() {
     if (blanks.length === 1) {
       const ask = document.createElement('a');
       ask.className = 'pill';
-      ask.href = engine.url(encodeURIComponent(fill(tpl, { [blanks[0].id]: c.topic })));
+      ask.href = engine.url(encodeURIComponent(withCard(fill(tpl, { [blanks[0].id]: c.topic }), c, engine)));
       ask.target = '_blank';
       ask.rel = 'noopener';
       ask.textContent = `${p?.label || defaultLabel(tpl)} ↗`;
@@ -501,7 +487,7 @@ function renderSaved() {
     if (c.angle) {
       const q = document.createElement('a');
       q.className = 'quiet';
-      q.href = engine.url(encodeURIComponent(c.angle));
+      q.href = engine.url(encodeURIComponent(withCard(c.angle, c, engine)));
       q.target = '_blank';
       q.rel = 'noopener';
       q.textContent = 'Its question ↗';
@@ -553,6 +539,7 @@ function renderSettings() {
   $('#v-theme').textContent = THEMES.find(t => t[0] === store.setting('theme', 'system'))[1];
   $('#s-explore').checked = store.setting('explore', true) !== false;
   $('#s-news').checked = store.setting('news', true) !== false;
+  $('#s-context').checked = store.setting('cardContext', true) !== false;
   $('#v-topics').textContent = `${prefsFrom(store.setting).categories.size} of ${CATEGORIES.length}`;
   $('#s-recent').checked = store.recentOn();
   const user = store.currentUser();
@@ -566,6 +553,12 @@ function renderSettings() {
 $('#s-newtab').addEventListener('change', e => store.updateSettings({ newTab: e.target.checked }));
 $('#s-explore').addEventListener('change', e => store.updateSettings({ explore: e.target.checked }));
 $('#s-news').addEventListener('change', e => store.updateSettings({ news: e.target.checked }));
+// A saved card asks with its background, as on the home page.
+function withCard(prompt, c, engine) {
+  return store.setting('cardContext', true) !== false ? withContext(prompt, c, engine) : prompt;
+}
+
+$('#s-context').addEventListener('change', e => store.updateSettings({ cardContext: e.target.checked }));
 $('#s-recent').addEventListener('change', e => store.setRecentOn(e.target.checked));
 
 function renderDetail() {

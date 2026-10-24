@@ -23,13 +23,11 @@ const RECENT_ON_KEY = 'tmea:recent-on';
 const MAX_RECENT = 6;
 
 // Starters carry FIXED ids and an old stamp: every fresh browser seeds the
-// same three records, so merging two browsers never duplicates them, and any
+// same records, so merging two browsers never duplicates them, and any
 // real edit or deletion made anywhere is newer and wins.
 const STARTER_STAMP = '2026-01-01T00:00:00.000Z';
 const STARTER_PROMPTS = [
   { id: 'starter-everything', label: 'Everything about', template: 'Tell me everything about {}' },
-  { id: 'starter-explain', label: 'Explain simply', template: 'Explain {} simply, as if to a smart friend who knows nothing about it' },
-  { id: 'starter-latest', label: 'Latest', template: "What's the latest on {}? Only recent developments, with dates" },
 ];
 
 let state = null;
@@ -128,7 +126,7 @@ export function reorder(ids) {
 
 // Saved like prompts: kept here, merged per card through the account when
 // signed in. Only what is needed to draw and ask the card is kept.
-const CARD_FIELDS = ['id', 'topic', 'hook', 'category', 'tags', 'kind', 'depth', 'surprise', 'origin', 'figure', 'figureLabel', 'angle'];
+const CARD_FIELDS = ['id', 'topic', 'hook', 'category', 'tags', 'kind', 'depth', 'surprise', 'origin', 'news', 'day', 'figure', 'figureLabel', 'angle', 'source'];
 
 export function savedCards() {
   return state.saved.map(r => r.card);
@@ -164,13 +162,16 @@ export function unsaveAll() {
   save({ ...state, saved: [], tombstones });
 }
 
-// The prompt the home page shows. The prompt editor sets it to the one being
-// edited, so going back lands on it.
+// The one prompt the home page uses, chosen in settings and synced like
+// them. Before it was a setting it was kept in this browser only; that
+// choice still counts until a new one is made.
 export function selectedId() {
+  const id = setting('homePrompt', null);
+  if (id) return id;
   try { return localStorage.getItem(SELECTED_KEY); } catch { return null; }
 }
 export function setSelectedId(id) {
-  try { localStorage.setItem(SELECTED_KEY, id); } catch { /* ignore */ }
+  updateSettings({ homePrompt: id });
 }
 
 // ---------- recent topics (this browser only) ----------

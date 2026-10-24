@@ -44,8 +44,10 @@ const USER_AGENT = 'tmea.space/1.0 (https://tmea.space/about; explore feed)';
 
 // ---------- sources ----------
 
-// Feeds beyond Wikipedia, each read for its titles only. A feed that fails
-// or changes shape is skipped; the day still has the others.
+// Feeds beyond Wikipedia, each read for its titles and links. A feed that
+// fails or changes shape is skipped; the day still has the others. Every
+// line is a { text, url }: the text goes to the model, the url stays here and
+// is kept on the card made from it, for the card manager.
 export const FEEDS = {
   hn: { title: 'Hacker News front page', origin: 'hn', type: 'hn', url: 'https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=30' },
   til: { title: "Reddit's Today I Learned", origin: 'til', type: 'reddit', url: 'https://www.reddit.com/r/todayilearned/top.json?t=day&limit=25' },
@@ -124,20 +126,25 @@ async function getBody(fetchImpl, url, as) {
 // Wikipedia's featured feed, boiled down to short lines by section.
 export function wikiLines(wiki) {
   const out = { featured: [], news: [], trending: [], onthisday: [] };
-  if (wiki?.tfa) out.featured.push(line(wiki.tfa.titles?.normalized, wiki.tfa.description || wiki.tfa.extract));
+  if (wiki?.tfa) out.featured.push(line(wiki.tfa.titles?.normalized, wiki.tfa.description || wiki.tfa.extract, wikiUrl(wiki.tfa)));
   for (const n of wiki?.news || []) {
-    out.news.push(line(stripHtml(n.story), (n.links || []).map(l => l.titles?.normalized).filter(Boolean).slice(0, 4).join('; ')));
+    out.news.push(line(stripHtml(n.story), (n.links || []).map(l => l.titles?.normalized).filter(Boolean).slice(0, 4).join('; '), wikiUrl(n.links?.[0])));
   }
   for (const a of (wiki?.mostread?.articles || []).slice(0, 30)) {
     const title = a.titles?.normalized || '';
     if (!title || /^(Main Page|Special:|Wikipedia:|Portal:|File:)/.test(title)) continue;
-    out.trending.push(line(title, a.description));
+    out.trending.push(line(title, a.description, wikiUrl(a)));
   }
   for (const e of (wiki?.onthisday || []).slice(0, 20)) {
-    out.onthisday.push(line(`${e.year}: ${e.text}`, (e.pages || []).map(p => p.titles?.normalized).filter(Boolean).slice(0, 3).join('; ')));
+    out.onthisday.push(line(`${e.year}: ${e.text}`, (e.pages || []).map(p => p.titles?.normalized).filter(Boolean).slice(0, 3).join('; '), wikiUrl(e.pages?.[0])));
   }
   for (const k of Object.keys(out)) out[k] = out[k].filter(Boolean);
   return out;
+}
+
+function wikiUrl(page) {
+  if (page?.content_urls?.desktop?.page) return page.content_urls.desktop.page;
+  return page?.titles?.canonical ? `https://en.wikipedia.org/wiki/${encodeURIComponent(page.titles.canonical)}` : '';
 }
 
 // One feed's body, boiled down to at most 20 title lines.
@@ -146,16 +153,16 @@ export function feedLines(type, body) {
   let lines = [];
   try {
     if (type === 'rss') lines = rssTitles(body);
-    else if (type === 'hn') lines = (body.hits || []).map(h => line(h.title));
-    else if (type === 'reddit') lines = (body.data?.children || []).map(c => line(String(c.data?.title || '').replace(/^TIL( that)?:?\s*/i, '')));
-    else if (type === 'apod') lines = [line(body.title, clip(body.explanation, 200))];
-    else if (type === 'openlibrary') lines = (body.works || []).map(w => line(w.title, (w.author_name || []).slice(0, 2).join(', ')));
+    else if (type === 'hn') lines = (body.hits || []).map(h => line(h.title, '', h.url || (h.objectID ? `https://news.ycombinator.com/item?id=${h.objectID}` : '')));
+    else if (type === 'reddit') lines = (body.data?.children || []).map(c => line(String(c.data?.title || '').replace(/^TIL( that)?:?\s*/i, ''), '', c.data?.url || (c.data?.permalink ? `https://www.reddit.com${c.data.permalink}` : '')));
+    else if (type === 'apod') lines = [line(body.title, clip(body.explanation, 200), /^\d{4}-\d\d-\d\d$/.test(body.date || '') ? `https://apod.nasa.gov/apod/ap${body.date.slice(2).replace(/-/g, '')}.html` : '')];
+    else if (type === 'openlibrary') lines = (body.works || []).map(w => line(w.title, (w.author_name || []).slice(0, 2).join(', '), w.key ? `https://openlibrary.org${w.key}` : ''));
   } catch { lines = []; }
   return lines.filter(Boolean).slice(0, 20);
 }
 
-// Titles out of RSS or Atom, without an XML parser (there is none in a
-// Worker). Only item and entry titles; the channel's own title is skipped.
+// Titles and links out of RSS or Atom, without an XML parser (there is none
+// in a Worker). Only items and entries; the channel's own title is skipped.
 export function rssTitles(xml) {
   const out = [];
   const blocks = String(xml).match(/<(item|entry)\b[\s\S]*?<\/\1>/gi) || [];
@@ -163,7 +170,8 @@ export function rssTitles(xml) {
     const m = b.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
     if (!m) continue;
     const t = decodeXml(m[1].replace(/^\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*$/, '$1')).replace(/<[^>]*>/g, '');
-    if (t.trim()) out.push(line(t));
+    const link = b.match(/<link\b[^>]*\bhref="([^"]+)"[^>]*>/i)?.[1] || b.match(/<link\b[^>]*>([\s\S]*?)<\/link>/i)?.[1] || '';
+    if (t.trim()) out.push(line(t, '', decodeXml(link.replace(/^\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*$/, '$1')).trim()));
   }
   return out;
 }
@@ -176,11 +184,15 @@ function decodeXml(s) {
     .replace(/&amp;/g, '&');
 }
 
-function line(main, detail) {
+function line(main, detail, url) {
   const a = clip(main, 240);
-  if (!a) return '';
+  if (!a) return null;
   const b = clip(detail, 200);
-  return b ? `${a} (${b})` : a;
+  return { text: b ? `${a} (${b})` : a, url: httpUrl(url) };
+}
+
+function httpUrl(v) {
+  try { const u = new URL(String(v || '').trim()); return /^https?:$/.test(u.protocol) ? u.toString() : ''; } catch { return ''; }
 }
 
 function stripHtml(s) {
@@ -203,6 +215,7 @@ Each card has:
 - surprise: "familiar" for topics most curious readers have heard of, "surprising" for ones they almost certainly have not. Include several of each.
 - tags: one to three tags from the list given, the ones a reader who likes them would want this card for.
 - origin: where the topic came from, as labelled in the material. Use "timeless" for topics you chose that are not in the material.
+- source: the reference in square brackets of the line in the material the topic came from, such as "bbcsport-3". An empty string for timeless topics.
 - figure: one short striking number or date that belongs to the topic, at most 10 characters, such as "1977", "17 km/s", "86 billion" or "c. 1831". It is printed large on the card, so it must be accurate: use a figure only if it appears in the material or is long-established fact. When you are not certain, use an empty string. A "number" card must have one.
 - figureLabel: three to six words saying what the figure is, such as "launched, still transmitting". Empty when figure is empty.
 - angle: one specific question a curious person would ask next, at most 140 characters, complete on its own (name the topic in it). For a debate, the question that divides people; for a myth, whether it is true.
@@ -211,14 +224,17 @@ Return the cards best first.`;
 
 // The part every category's call shares, so it can be cached: the date, the
 // day's general material, and what has been used recently.
+const WIKI_SECTIONS = {
+  featured: 'Featured article on Wikipedia',
+  news: 'In the news',
+  trending: 'Most read on Wikipedia yesterday',
+  onthisday: 'On this day',
+};
+
 export function sharedMessage(day, sources, avoid = []) {
-  const w = sources.wiki;
   const body = [
-    section('Featured article on Wikipedia (origin: featured)', w.featured),
-    section('In the news (origin: news)', w.news),
-    section('Most read on Wikipedia yesterday (origin: trending)', w.trending),
-    section('On this day (origin: onthisday)', w.onthisday),
-    section("Reddit's Today I Learned (origin: til)", sources.feeds.til || []),
+    ...Object.entries(WIKI_SECTIONS).map(([id, title]) => section(`${title} (origin: ${id})`, id, sources.wiki[id])),
+    section(`${FEEDS.til.title} (origin: til)`, 'til', sources.feeds.til || []),
   ].filter(Boolean).join('\n\n');
   const recent = avoid.length ? `\n\nTopics used in the last two weeks. Do not repeat any of them:\n${avoid.join('; ')}` : '';
   return `Today is ${day}. Here is what the world is reading today.\n\n${body || '(The general sources could not be reached today.)'}${recent}`;
@@ -227,7 +243,7 @@ export function sharedMessage(day, sources, avoid = []) {
 export function categoryMessage(category, sources) {
   const c = CATEGORIES.find(x => x.id === category);
   const feeds = (CATEGORY_FEEDS[category] || [])
-    .map(id => section(`${FEEDS[id].title} (origin: ${FEEDS[id].origin})`, sources.feeds[id] || []))
+    .map(id => section(`${FEEDS[id].title} (origin: ${FEEDS[id].origin})`, id, sources.feeds[id] || []))
     .filter(Boolean)
     .join('\n\n');
   const tags = c.tags.map(t => `${t.id} (${t.name})`).join(', ');
@@ -241,7 +257,7 @@ ${feeds ? `Material for ${c.name}:\n\n${feeds}` : `There is no extra material fo
 // The news call: explainers for what is happening, filed under the topics.
 export function newsMessage(sources) {
   const feeds = NEWS_FEEDS
-    .map(id => section(`${FEEDS[id].title} (origin: news)`, sources.feeds[id] || []))
+    .map(id => section(`${FEEDS[id].title} (origin: news)`, id, sources.feeds[id] || []))
     .filter(Boolean)
     .join('\n\n');
   const topics = CATEGORIES.map(c => `${c.id} (${c.name}: ${c.tags.map(t => t.id).join(', ')})`).join('; ');
@@ -261,8 +277,21 @@ News cards follow stricter rules than the others:
 ${feeds ? `News feeds:\n\n${feeds}` : 'The news feeds could not be reached today; use the In the news section of the shared material, or return no cards.'}`;
 }
 
-function section(title, lines) {
-  return lines.length ? `## ${title}\n${lines.map(l => `- ${l}`).join('\n')}` : '';
+// Each line carries its reference, which a card names as its source.
+function section(title, id, lines) {
+  return lines.length ? `## ${title}\n${lines.map((l, i) => `- [${id}-${i + 1}] ${l.text ?? l}`).join('\n')}` : '';
+}
+
+// Every line of the day's material by its reference, as a card's source:
+// where it was read, the line, and its link.
+export function sourceIndex(sources) {
+  const out = new Map();
+  const add = (id, from, lines) => (lines || []).forEach((l, i) => {
+    if (l?.text) out.set(`${id}-${i + 1}`, { from, title: l.text, url: l.url || '' });
+  });
+  for (const [id, title] of Object.entries(WIKI_SECTIONS)) add(id, title, sources.wiki?.[id]);
+  for (const [id, lines] of Object.entries(sources.feeds || {})) if (FEEDS[id]) add(id, FEEDS[id].title, lines);
+  return out;
 }
 
 export const CARD_SCHEMA = {
@@ -275,7 +304,7 @@ export const CARD_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['topic', 'hook', 'kind', 'depth', 'surprise', 'tags', 'origin', 'figure', 'figureLabel', 'angle'],
+        required: ['topic', 'hook', 'kind', 'depth', 'surprise', 'tags', 'origin', 'figure', 'figureLabel', 'angle', 'source'],
         properties: {
           topic: { type: 'string' },
           hook: { type: 'string' },
@@ -287,6 +316,7 @@ export const CARD_SCHEMA = {
           figure: { type: 'string' },
           figureLabel: { type: 'string' },
           angle: { type: 'string' },
+          source: { type: 'string' },
         },
       },
     },
@@ -346,11 +376,13 @@ export function interestMessage(text, avoid = []) {
   return `The visitor's interest:\n<interest>${String(text).replace(/[<>]/g, '')}</interest>\n\nWrite ${PACK_SIZE} cards for it.${recent}`;
 }
 
+// A collection is written without material, so its cards have no source.
+const { source: _source, ...CARD_FIELDS } = CARD_SCHEMA.properties.cards.items.properties;
 const PACK_CARD = {
   ...CARD_SCHEMA.properties.cards.items,
-  required: [...CARD_SCHEMA.properties.cards.items.required, 'category', 'step'],
+  required: [...CARD_SCHEMA.properties.cards.items.required.filter(f => f !== 'source'), 'category', 'step'],
   properties: {
-    ...CARD_SCHEMA.properties.cards.items.properties,
+    ...CARD_FIELDS,
     category: { type: 'string', enum: CATEGORY_IDS },
     step: { type: 'string', enum: STEP_IDS },
   },
@@ -411,6 +443,7 @@ export async function generate(env, day, { fetchImpl = fetch, history = [] } = {
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   const model = exploreModel(env);
   const shared = sharedMessage(day, sources, avoid.map(a => a.topic));
+  const index = sourceIndex(sources);
   // One call per topic, and one for the news; all share the day's material.
   const ask = async (text, schema) => {
     const response = await client.beta.messages.create({
@@ -433,10 +466,10 @@ export async function generate(env, day, { fetchImpl = fetch, history = [] } = {
   const [results, news] = await Promise.all([
     Promise.allSettled(CATEGORY_IDS.map(async category => {
       const r = await ask(categoryMessage(category, sources), CARD_SCHEMA);
-      return { model: r.model, cards: cleanCards(r.cards, { category }).slice(0, MAX_PER_CATEGORY) };
+      return { model: r.model, cards: cleanCards(r.cards, { category, sources: index }).slice(0, MAX_PER_CATEGORY) };
     })),
     ask(newsMessage(sources), NEWS_SCHEMA).then(
-      r => ({ model: r.model, cards: cleanCards(r.cards).slice(0, NEWS_CARDS).map(c => ({ ...c, origin: 'news', news: true })) }),
+      r => ({ model: r.model, cards: cleanCards(r.cards, { sources: index }).slice(0, NEWS_CARDS).map(c => ({ ...c, origin: 'news', news: true })) }),
       err => ({ error: err?.message || String(err), cards: [] }),
     ),
   ]);
@@ -556,7 +589,10 @@ function dayNumber(day) {
 // The model's reply is data for a page, so every field is trimmed, capped and
 // checked against the allowed values; a card that fails is dropped, not fixed.
 // With { category } every card belongs to that category (one call each).
-export function cleanCards(raw, { category } = {}) {
+// With { sources } (sourceIndex) a card's source reference becomes the line
+// it names, with its link; otherwise a source already on the card (one
+// being edited) is kept if it is well formed.
+export function cleanCards(raw, { category, sources } = {}) {
   const seen = topicSet();
   const out = [];
   for (const c of Array.isArray(raw) ? raw : []) {
@@ -582,9 +618,16 @@ export function cleanCards(raw, { category } = {}) {
       figure,
       figureLabel: figure ? clip(c.figureLabel, LIMITS.figureLabel) : '',
       angle: clip(c.angle, LIMITS.angle),
+      ...cardSource(c.source, sources),
     });
   }
   return out;
+}
+
+function cardSource(v, sources) {
+  const s = sources ? sources.get(String(v || '').trim()) : v && typeof v === 'object' ? v : null;
+  const title = clip(s?.title, 240);
+  return title ? { source: { from: clip(s.from, 80), title, url: httpUrl(s.url) } } : {};
 }
 
 // Whitespace collapsed, control characters gone, cut at a word near the cap.

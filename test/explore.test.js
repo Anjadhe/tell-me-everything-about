@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  cleanCards, clip, slug, wikiLines, feedLines, rssTitles, sharedMessage, categoryMessage, assembleFeed, recentTopics,
+  cleanCards, clip, slug, wikiLines, feedLines, rssTitles, sharedMessage, categoryMessage, assembleFeed, recentTopics, sourceIndex,
   sponsoredCard, EVERGREEN, CARD_SCHEMA, FEEDS, CATEGORY_FEEDS, MAX_CARRIED, exploreModel, modelRequest, DEFAULT_MODEL,
 } from '../src/explore.js';
 import { CATEGORY_IDS, TAG_IDS, ORIGINS, KINDS } from '../public/categories.js';
@@ -57,30 +57,30 @@ test('clip and slug', () => {
 
 test('Wikipedia boils down and skips housekeeping pages', () => {
   const w = wikiLines({
-    tfa: { titles: { normalized: 'Hokusai' }, description: 'Japanese artist' },
+    tfa: { titles: { normalized: 'Hokusai', canonical: 'Hokusai' }, description: 'Japanese artist' },
     news: [{ story: '<b>A</b> thing &amp; another', links: [{ titles: { normalized: 'Thing' } }] }],
-    mostread: { articles: [{ titles: { normalized: 'Main Page' } }, { titles: { normalized: 'Tardigrade' }, description: 'Micro-animal' }] },
+    mostread: { articles: [{ titles: { normalized: 'Main Page' } }, { titles: { normalized: 'Tardigrade' }, description: 'Micro-animal', content_urls: { desktop: { page: 'https://en.wikipedia.org/wiki/Tardigrade' } } }] },
     onthisday: [{ year: 1977, text: 'Voyager 1 is launched.', pages: [{ titles: { normalized: 'Voyager 1' } }] }],
   });
-  assert.deepEqual(w.featured, ['Hokusai (Japanese artist)']);
-  assert.deepEqual(w.news, ['A thing & another (Thing)']);
-  assert.deepEqual(w.trending, ['Tardigrade (Micro-animal)']);
-  assert.deepEqual(w.onthisday, ['1977: Voyager 1 is launched. (Voyager 1)']);
+  assert.deepEqual(w.featured, [{ text: 'Hokusai (Japanese artist)', url: 'https://en.wikipedia.org/wiki/Hokusai' }]);
+  assert.deepEqual(w.news, [{ text: 'A thing & another (Thing)', url: '' }]);
+  assert.deepEqual(w.trending, [{ text: 'Tardigrade (Micro-animal)', url: 'https://en.wikipedia.org/wiki/Tardigrade' }]);
+  assert.deepEqual(w.onthisday.map(l => l.text), ['1977: Voyager 1 is launched. (Voyager 1)']);
   assert.deepEqual(wikiLines(null), { featured: [], news: [], trending: [], onthisday: [] });
 });
 
 test('RSS and Atom titles, with CDATA and entities, skipping the channel title', () => {
-  const rss = `<rss><channel><title>Feed name</title><item><title><![CDATA[Bees & <i>wasps</i>]]></title></item><item><title>Q&amp;A: why &#8220;fusion&#8221;</title></item></channel></rss>`;
-  assert.deepEqual(rssTitles(rss), ['Bees & wasps', 'Q&A: why “fusion”']);
-  const atom = `<feed><title>X</title><entry><title type="html">Cities that walk</title></entry></feed>`;
-  assert.deepEqual(rssTitles(atom), ['Cities that walk']);
+  const rss = `<rss><channel><title>Feed name</title><link>https://feed.example/</link><item><title><![CDATA[Bees & <i>wasps</i>]]></title><link>https://feed.example/bees?a=1&amp;b=2</link></item><item><title>Q&amp;A: why &#8220;fusion&#8221;</title><link><![CDATA[javascript:alert(1)]]></link></item></channel></rss>`;
+  assert.deepEqual(rssTitles(rss), [{ text: 'Bees & wasps', url: 'https://feed.example/bees?a=1&b=2' }, { text: 'Q&A: why “fusion”', url: '' }]);
+  const atom = `<feed><title>X</title><entry><title type="html">Cities that walk</title><link rel="alternate" href="https://feed.example/cities"/></entry></feed>`;
+  assert.deepEqual(rssTitles(atom), [{ text: 'Cities that walk', url: 'https://feed.example/cities' }]);
 });
 
 test('each feed type reads its own shape, and a broken body is nothing', () => {
-  assert.deepEqual(feedLines('hn', { hits: [{ title: 'Show HN: a thing' }] }), ['Show HN: a thing']);
-  assert.deepEqual(feedLines('reddit', { data: { children: [{ data: { title: 'TIL that octopuses taste with their arms' } }] } }), ['octopuses taste with their arms']);
-  assert.deepEqual(feedLines('openlibrary', { works: [{ title: 'Dune', author_name: ['Frank Herbert'] }] }), ['Dune (Frank Herbert)']);
-  assert.equal(feedLines('apod', { title: 'M31', explanation: 'A galaxy.' })[0], 'M31 (A galaxy.)');
+  assert.deepEqual(feedLines('hn', { hits: [{ title: 'Show HN: a thing', objectID: '42' }] }), [{ text: 'Show HN: a thing', url: 'https://news.ycombinator.com/item?id=42' }]);
+  assert.deepEqual(feedLines('reddit', { data: { children: [{ data: { title: 'TIL that octopuses taste with their arms', url: 'https://example.org/octopus' } }] } }), [{ text: 'octopuses taste with their arms', url: 'https://example.org/octopus' }]);
+  assert.deepEqual(feedLines('openlibrary', { works: [{ title: 'Dune', author_name: ['Frank Herbert'], key: '/works/OL893415W' }] }), [{ text: 'Dune (Frank Herbert)', url: 'https://openlibrary.org/works/OL893415W' }]);
+  assert.deepEqual(feedLines('apod', { title: 'M31', explanation: 'A galaxy.', date: '2026-10-24' })[0], { text: 'M31 (A galaxy.)', url: 'https://apod.nasa.gov/apod/ap261024.html' });
   assert.deepEqual(feedLines('hn', 'not json'), []);
   assert.deepEqual(feedLines('rss', null), []);
 });
@@ -94,7 +94,7 @@ test('the shared message carries the day, the material and what not to repeat', 
   const sources = { wiki: wikiLines(null), feeds: { til: ['octopuses taste with their arms'] } };
   const m = sharedMessage('2026-10-21', sources, ['Tardigrades', 'Stoicism']);
   assert.match(m, /Today is 2026-10-21/);
-  assert.match(m, /Today I Learned \(origin: til\)\n- octopuses/);
+  assert.match(m, /Today I Learned \(origin: til\)\n- \[til-1\] octopuses/);
   assert.match(m, /Do not repeat any of them:\nTardigrades; Stoicism/);
 });
 
@@ -102,7 +102,7 @@ test('a category message names its tags and its own material', () => {
   const m = categoryMessage('sport', { wiki: wikiLines(null), feeds: { bbcsport: ['Marathon record falls'] } });
   assert.match(m, /cards for Sport/);
   assert.match(m, /football \(Football\)/);
-  assert.match(m, /BBC Sport \(origin: sport\)\n- Marathon record falls/);
+  assert.match(m, /BBC Sport \(origin: sport\)\n- \[bbcsport-1\] Marathon record falls/);
   assert.match(categoryMessage('nature', { wiki: wikiLines(null), feeds: {} }), /no extra material/);
 });
 
@@ -370,7 +370,7 @@ test('cards from before Health and Business were topics are brought up to date',
 
 test('the news call files stories under existing topics, with stricter rules', () => {
   const m = newsMessage({ wiki: wikiLines(null), feeds: { bbcworld: ['Tanker seized in the Strait of Hormuz'] } });
-  assert.match(m, /BBC News: world \(origin: news\)\n- Tanker seized/);
+  assert.match(m, /BBC News: world \(origin: news\)\n- \[bbcworld-1\] Tanker seized/);
   assert.match(m, /Use only facts, names and figures that appear in the material/);
   assert.match(m, /Leave out elections, campaigns, party politics/);
   assert.match(m, /health \(Health: medicine, body/);
@@ -392,4 +392,16 @@ test('news lasts a day: carried once, then gone; and an old story may come back'
   assert.ok(avoid.includes('heat-1') && !avoid.includes('flood-1') && avoid.includes('kept'));
   assert.equal(isNews({ origin: 'news' }), true);
   assert.equal(isNews({ origin: 'til' }), false);
+});
+
+test('a card names the line it came from, and keeps that line and its link', () => {
+  const sources = { wiki: wikiLines(null), feeds: { bbcsport: [{ text: 'Marathon record falls', url: 'https://www.bbc.co.uk/sport/1' }] } };
+  const index = sourceIndex(sources);
+  const [c, timeless, made] = cleanCards([card({ source: 'bbcsport-1' }), card({ topic: 'Stoicism', source: '' }), card({ topic: 'Tides', source: 'bbcsport-9' })], { sources: index });
+  assert.deepEqual(c.source, { from: 'BBC Sport', title: 'Marathon record falls', url: 'https://www.bbc.co.uk/sport/1' });
+  assert.equal(timeless.source, undefined);
+  assert.equal(made.source, undefined);
+  // An edited card keeps the source it had; a bad link is dropped.
+  const [kept] = cleanCards([card({ source: { from: 'BBC Sport', title: 'Marathon record falls', url: 'javascript:alert(1)' } })]);
+  assert.deepEqual(kept.source, { from: 'BBC Sport', title: 'Marathon record falls', url: '' });
 });

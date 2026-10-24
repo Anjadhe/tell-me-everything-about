@@ -35,7 +35,6 @@
 </header>
 
 <main class="stage">
-  <div id="prompt-tabs" class="tabs" role="tablist" aria-label="Prompts"></div>
 
   <form id="ask" class="ask" autocomplete="off">
     <div class="sentence" id="sentence" role="group" aria-label="Your prompt"><span class="keep" hidden></span></div>
@@ -47,8 +46,9 @@
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
       </button>
       <a id="edit-prompt" class="edit-link" href="/settings#prompts">Edit prompt</a>
+      <span id="pv-context" class="pv-context" hidden>+ the card's background</span>
       </span>
-      <span class="hint" id="hint"><span id="hint-take" class="hint-take" hidden><kbd>⇥</kbd> take suggestion <span class="sep"></span></span><kbd>↵</kbd> open <span class="sep"></span> <kbd>⌘</kbd><kbd>↵</kbd> new tab <span class="sep"></span> <kbd>↑</kbd><kbd>↓</kbd> prompt</span>
+      <span class="hint" id="hint"><span id="hint-take" class="hint-take" hidden><kbd>⇥</kbd> take suggestion <span class="sep"></span></span><kbd>↵</kbd> open <span class="sep"></span> <kbd>⌘</kbd><kbd>↵</kbd> new tab</span>
     </div>
   </form>
 

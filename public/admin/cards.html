@@ -32,6 +32,10 @@
   .cm-text .h { color: var(--ink-2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .cm-text .m { color: var(--ink-3); font-size: 11px; }
   .cm-text .m b { color: oklch(var(--kick-l) var(--kick-c) var(--h)); font-weight: 600; }
+  .cm-text .s, .ce-source { color: var(--ink-3); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cm-text .s a, .ce-source a { color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--line-2); }
+  .cm-text .s a:hover, .ce-source a:hover { color: var(--ink); }
+  .ce-source { grid-column: 1 / -1; white-space: normal; }
   .cm-row .acts { display: flex; gap: 4px; }
   .cm-empty { color: var(--ink-2); padding: 18px 2px; }
   .cm-error { color: var(--danger); font-size: 12.5px; min-height: 18px; margin: 6px 0; }

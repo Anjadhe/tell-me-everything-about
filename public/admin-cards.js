@@ -176,8 +176,27 @@ function row(c) {
   m.querySelector('b').textContent = meta.shift();
   m.append(meta.length ? ` · ${meta.join(' · ')}` : '');
   const acts = li.querySelector('.acts');
+  if (collection === 'daily') li.querySelector('.cm-text').append(sourceLine(c));
   acts.append(button('Edit', 'pill', () => openEditor(c)), button('Delete', 'quiet danger', () => deleteCard(c)));
   return li;
+}
+
+// What a daily card was written from: the line in the day's material, linked
+// to the article. Cards from before sources were kept, and timeless ones,
+// have none.
+function sourceLine(c) {
+  const s = document.createElement('span');
+  s.className = 's';
+  if (!c.source) {
+    s.textContent = c.origin === 'timeless' ? 'No source: a timeless topic' : 'No source recorded';
+    return s;
+  }
+  s.append(`${c.source.from}: `);
+  const title = c.source.url ? document.createElement('a') : document.createElement('span');
+  title.textContent = c.source.title;
+  if (c.source.url) Object.assign(title, { href: c.source.url, target: '_blank', rel: 'noopener noreferrer', title: c.source.url });
+  s.append(title);
+  return s;
 }
 
 function button(text, cls, onClick) {
@@ -274,7 +293,7 @@ function select(options) {
 }
 
 function openEditor(c) {
-  editing = { id: c?.id || null, carried: c?.carried, day: c?.day };
+  editing = { id: c?.id || null, carried: c?.carried, day: c?.day, source: c?.source };
   $('#ce-title').textContent = c ? 'Edit card' : `New card${collection === 'pack' ? ` for ${COLLECTIONS.pack.title}` : ''}`;
   $('#ce-error').textContent = '';
   $('#ce-delete').hidden = !c;
@@ -308,6 +327,7 @@ function openEditor(c) {
   if (collection === 'daily') {
     const origin = select(Object.entries(ORIGINS)); origin.value = v.origin || 'timeless';
     fieldsEl.append(field('origin', 'Where it came from', origin));
+    if (c) { const src = sourceLine(c); src.classList.add('ce-source'); fieldsEl.append(src); }
   }
   if (collection === 'pack') {
     const step = select(Object.entries(STEPS)); step.value = v.step || 'deeper';
@@ -395,6 +415,7 @@ function values() {
     if (!editing.id && val('rowId').trim()) out.rowId = val('rowId').trim();
   }
   if (editing.carried) Object.assign(out, { carried: true, day: editing.day });
+  if (collection === 'daily' && editing.source) out.source = editing.source;
   return out;
 }
 

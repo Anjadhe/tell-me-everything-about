@@ -7,19 +7,20 @@
 
 import * as store from './store.js?v=c133954c60';
 import { ENGINES, engineById } from './engines.js?v=c133954c60';
-import { parse, fill, defaultLabel, autoValues } from './template.js?v=c133954c60';
+import { parse, fill, autoValues } from './template.js?v=c133954c60';
 import { buildSentence, wireSentence, valuesOf } from './sentence.js?v=c133954c60';
 import { createExplore } from './explore.js?v=c133954c60';
 import { prefsFrom } from './interests.js?v=c133954c60';
+import { withContext, cardContext } from './context.js?v=c133954c60';
 
 const FEED_KEY = 'tmea:explore-feed';
 // A copy fetched this recently is not asked for again (rapid reloads).
 const FEED_FRESH_MS = 60 * 1000;
 
 const $ = s => document.querySelector(s);
-const tabsEl = $('#prompt-tabs');
 const sentenceEl = $('#sentence');
 const previewEl = $('#sentence-preview');
+const previewContext = $('#pv-context');
 const engineBtn = $('#engine-btn');
 const engineName = $('#engine-name');
 const engineMenu = $('#engine-menu');
@@ -28,10 +29,10 @@ const footNote = $('#foot-note');
 const syncDot = $('#sync-dot');
 const hintTake = $('#hint-take');
 
-let selectedId = store.selectedId();
 let inputs = [];
-// What has been typed, by blank name, so switching prompts keeps it; the
-// first box also carries over by position (a topic is a topic).
+// What has been typed, by blank name, so a change of prompt (made in
+// settings, perhaps on another device) keeps it; the first box also carries
+// over by position (a topic is a topic).
 const typed = {};
 let firstTyped = '';
 
@@ -40,9 +41,10 @@ let firstTyped = '';
 // point, so the box is not autofocused; and a launch navigates the whole tab.
 const FRAMED = window.self !== window.top;
 
+// The one prompt the home page uses, chosen in settings.
 function selected() {
   const list = store.prompts();
-  return list.find(p => p.id === selectedId) || list[0] || null;
+  return list.find(p => p.id === store.selectedId()) || list[0] || null;
 }
 
 function template() {
@@ -54,23 +56,6 @@ function currentEngine() {
 }
 
 // ---------- the sentence ----------
-
-function renderTabs() {
-  const list = store.prompts();
-  const cur = selected();
-  tabsEl.innerHTML = '';
-  for (const p of list) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'tab';
-    b.role = 'tab';
-    b.textContent = p.label || defaultLabel(p.template);
-    b.setAttribute('aria-selected', String(cur && p.id === cur.id));
-    b.tabIndex = cur && p.id === cur.id ? 0 : -1;
-    b.addEventListener('click', () => select(p.id));
-    tabsEl.appendChild(b);
-  }
-}
 
 function keepTyped() {
   Object.assign(typed, valuesOf(inputs));
@@ -99,14 +84,6 @@ function renderSentence() {
 
 function ghostOf(input) {
   return input?.parentElement.querySelector('.ghost');
-}
-
-function select(id, { focus = true } = {}) {
-  selectedId = id;
-  store.setSelectedId(id);
-  renderTabs();
-  renderSentence();
-  if (focus) focusFirstEmpty();
 }
 
 function focusFirstEmpty() {
@@ -146,14 +123,6 @@ sentenceEl.addEventListener('keydown', e => {
     inputs[i - 1].focus();
     return;
   }
-  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-    const list = store.prompts();
-    if (list.length < 2) return;
-    e.preventDefault();
-    const at = list.findIndex(p => p.id === selected()?.id);
-    select(list[(at + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length].id, { focus: false });
-    (inputs[Math.min(Math.max(i, 0), inputs.length - 1)] || inputs[0])?.focus();
-  }
 });
 
 // ---------- launching ----------
@@ -161,14 +130,20 @@ sentenceEl.addEventListener('keydown', e => {
 // The address a launch would open, for Explore's links. A card's question
 // goes as it is; a topic goes into the prompt's blank. A prompt with several
 // blanks cannot be finished by one topic, so the card fills the first box
-// instead of linking anywhere.
-function link(text, kind) {
+// instead of linking anywhere. A card's own links carry its context to an
+// AI engine, unless switched off in settings.
+function link(text, kind, card) {
   const target = store.setting('newTab', false) ? '_blank' : FRAMED ? '_top' : '';
   const engine = currentEngine();
-  if (kind === 'angle') return { href: engine.url(encodeURIComponent(text)), target };
+  const ask = q => engine.url(encodeURIComponent(card && withCard() ? withContext(q, card, engine) : q));
+  if (kind === 'angle') return { href: ask(text), target };
   const { blanks } = parse(template());
   if (blanks.length > 1) return { fill: true };
-  return { href: engine.url(encodeURIComponent(fill(template(), { [blanks[0].id]: text }))), target };
+  return { href: ask(fill(template(), { [blanks[0].id]: text })), target };
+}
+
+function withCard() {
+  return store.setting('cardContext', true) !== false;
 }
 
 function fillFirst(topic) {
@@ -239,11 +214,7 @@ function isTyping(el) {
 }
 window.addEventListener('pageshow', e => {
   document.body.classList.remove('launching');
-  if (e.persisted) {
-    selectedId = store.selectedId();
-    renderTabs();
-    renderSentence();
-  }
+  if (e.persisted) renderSentence();
   clearPreview();
   explore?.render();
   if (!FRAMED) focusFirstEmpty();
@@ -368,9 +339,10 @@ async function loadFeed() {
 // box, or the card's question on its own. It is drawn over the sentence in
 // a layer of exactly the same size, with the type made smaller until it
 // fits, so the page never moves however long the topic is.
-function preview(kind, text) {
+function preview(kind, text, card) {
   if (!sentenceInView()) { clearPreview(); return; }
   previewing = kind;
+  previewContext.hidden = !(card && withCard() && currentEngine().ai && cardContext(card));
   previewEl.replaceChildren();
   if (kind === 'question') {
     previewEl.append(span('pv-fill', text));
@@ -418,6 +390,7 @@ function span(cls, text) {
 function clearPreview() {
   if (!previewing) return;
   previewing = null;
+  previewContext.hidden = true;
   previewEl.hidden = true;
   previewEl.replaceChildren();
   sentenceEl.classList.remove('under-preview');
@@ -537,8 +510,6 @@ store.subscribe(what => {
   else if (what === 'busy') syncDot.classList.add('busy');
   else if (what === 'idle') syncDot.classList.remove('busy');
   else if (what === 'state') {
-    selectedId = store.selectedId() || selectedId;
-    renderTabs();
     renderSentence();
     if (explore && exploreOn()) explore.refresh(); else renderExplore();
   }
@@ -559,7 +530,6 @@ $('#homepage-copy').addEventListener('click', async e => {
 
 // ---------- boot ----------
 
-renderTabs();
 renderSentence();
 renderUser();
 renderExplore();
